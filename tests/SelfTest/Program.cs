@@ -196,6 +196,73 @@ if (capcut != null)
     }
 }
 
+// ---- OpenAI-compatible provider against a local mock server (request/response wire format)
+{
+    Console.WriteLine("[OpenAI-compatible provider]");
+    var port = 18000 + Random.Shared.Next(1000);
+    using var listener = new System.Net.HttpListener();
+    listener.Prefixes.Add($"http://127.0.0.1:{port}/v1/");
+    listener.Start();
+    var bodies = new List<JsonNode>();
+    var server = Task.Run(async () =>
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            var ctx = await listener.GetContextAsync();
+            string reply;
+            if (ctx.Request.HttpMethod == "GET")
+                reply = """{"data":[{"id":"big-model:free","supported_parameters":["tools"]},{"id":"no-tools:free","supported_parameters":["temperature"]},{"id":"paid-model","supported_parameters":["tools"]},{"id":"whisper-large:free"}]}""";
+            else
+            {
+                using var sr = new StreamReader(ctx.Request.InputStream);
+                var body = JsonNode.Parse(await sr.ReadToEndAsync())!;
+                bodies.Add(body);
+                reply = bodies.Count == 1
+                    ? """{"choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"reasoning":"x","tool_calls":[{"id":"call_A","type":"function","function":{"name":"get_project_overview","arguments":"{}"}}]}}]}"""
+                    : """{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"<think>hidden</think>הכל מוכן"}}]}""";
+            }
+            var bytes = System.Text.Encoding.UTF8.GetBytes(reply);
+            ctx.Response.ContentType = "application/json";
+            await ctx.Response.OutputStream.WriteAsync(bytes);
+            ctx.Response.Close();
+        }
+    });
+    var svc = AIVideoEditor.AI.Services.Get("openrouter")!;
+    var models = await AIVideoEditor.AI.OpenAiCompatProvider.ListModels(svc, "test-key", $"http://127.0.0.1:{port}/v1");
+    Check(models.SequenceEqual(["big-model:free"]), $"model list keeps only free tool-capable models ({string.Join(",", models)})");
+    var ranked = AIVideoEditor.AI.OpenAiCompatProvider.Rank(svc, ["liquid/lfm-3-1.7b:free", "baidu/ernie-5.5-flash-preview:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free", "google/gemma-4-31b-it:free", "nvidia/nemotron-3.5-lightning:free"]);
+    Check(ranked[0] == "nvidia/nemotron-3-ultra-550b-a55b:free" && ranked[1] == "google/gemma-4-31b-it:free" && ranked[^1] == "liquid/lfm-3-1.7b:free",
+        "ranking prefers big models: " + string.Join(" > ", ranked.Take(3)));
+    var settingsFile2 = Path.Combine(Paths.AppData, "settings.json");
+    var settingsBackup2 = File.Exists(settingsFile2) ? File.ReadAllText(settingsFile2) : null;
+    try
+    {
+        var f = Path.Combine(work, "oa.mlt");
+        new TimelineProject(Editors.Get("shotcut"), f);
+        var prov = new AIVideoEditor.AI.OpenAiCompatProvider(svc, "test-key", "big-model:free", $"http://127.0.0.1:{port}/v1");
+        var said = new List<string>();
+        var agent = new AIVideoEditor.AI.Agent(prov, (e, d) => { if (e == "assistant") said.Add(d?.ToString() ?? ""); });
+        agent.Open("shotcut", f);
+        await agent.SendAsync("מה יש בפרויקט?");
+        await server;
+        Check(bodies.Count == 2, $"{bodies.Count} chat requests");
+        var second = bodies[1]["messages"]!.AsArray();
+        Check(bodies[0]["messages"]![0]!["content"]!.ToString() == second[0]!["content"]!.ToString(), "same system message on both requests");
+        var echo = second.FirstOrDefault(m => m!["role"]!.ToString() == "assistant");
+        Check(echo?["tool_calls"]?[0]?["id"]?.ToString() == "call_A" && echo?["reasoning"] == null, "assistant tool call echoed without extra fields");
+        var tool = second.FirstOrDefault(m => m!["role"]!.ToString() == "tool");
+        Check(tool?["tool_call_id"]?.ToString() == "call_A" && tool?["content"]?.ToString().Contains("Shotcut") == true, "tool result sent back with the right id");
+        Check(bodies[0]["tools"]!.AsArray().Count == AIVideoEditor.AI.ToolDefs.Global.Count + AIVideoEditor.AI.ToolDefs.Project.Count, "all tools offered");
+        Check(said.SequenceEqual(["הכל מוכן"]), "final answer shown, <think> removed");
+    }
+    finally
+    {
+        if (settingsBackup2 != null) File.WriteAllText(settingsFile2, settingsBackup2); else File.Delete(settingsFile2);
+        listener.Stop();
+    }
+}
+
 // ---- optional: leave a finished demo project (used for the README screenshot)
 var demoIdx = Array.IndexOf(args, "--demo");
 if (demoIdx >= 0 && demoIdx + 1 < args.Length)

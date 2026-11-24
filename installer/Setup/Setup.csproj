@@ -12,7 +12,7 @@
     <OptimizationPreference>Size</OptimizationPreference>
     <ApplicationIcon>..\..\src\AIVideoEditor\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>2.0.1</Version>
+    <Version>2.1.0</Version>
     <Product>AI Video Editor Setup</Product>
     <PayloadPath Condition="'$(PayloadPath)' == ''">..\..\artifacts\app\AIVideoEditor.exe</PayloadPath>
   </PropertyGroup>

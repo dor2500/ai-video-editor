@@ -140,28 +140,14 @@ a{color:var(--accent);cursor:pointer}
 
 <div class="modal-bg" id="mSettings"><div class="modal">
   <h3>הגדרות AI</h3>
-  <p>בחר איזה מודל יבצע את העריכות והזן מפתח API. המפתחות נשמרים מוצפנים רק במחשב הזה.</p>
-  <div class="seg-tabs">
-    <button id="tabClaude" onclick="pickProvider('claude')">Claude (Anthropic)</button>
-    <button id="tabGemini" onclick="pickProvider('gemini')">Gemini (Google)</button>
-  </div>
-  <div id="boxClaude">
-    <label>מפתח Claude API — מ-<a onclick="api.open_url('https://console.anthropic.com/settings/keys')">console.anthropic.com</a></label>
-    <input id="claudeKey" type="password" placeholder="sk-ant-...">
-    <label>מודל</label>
-    <select id="claudeModel">
-      <option value="claude-opus-5-5">Claude Opus 5.5 (מומלץ)</option>
-      <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (זול ומהיר יותר)</option>
-      <option value="claude-haiku-5-5">Claude Haiku 5.5 (הכי זול)</option>
-      <option value="claude-fable-5-2">Claude Fable 5.2 (הכי חזק, יקר)</option>
-    </select>
-  </div>
-  <div id="boxGemini" style="display:none">
-    <label>מפתח Gemini API — מ-<a onclick="api.open_url('https://aistudio.google.com/apikey')">aistudio.google.com</a></label>
-    <input id="geminiKey" type="password" placeholder="AIza...">
-    <label>מודל</label>
-    <div class="keyrow"><select id="geminiModel"><option value="">(אוטומטי — הכי חדש)</option></select><button onclick="loadGemini()">טען רשימה</button></div>
-  </div>
+  <p>בחר שירות AI והזן מפתח API. השירותים המסומנים <b>חינם</b> לא דורשים כרטיס אשראי. המפתחות נשמרים מוצפנים רק במחשב הזה.</p>
+  <label>שירות</label>
+  <select id="provSel" onchange="pickProvider(this.value)"></select>
+  <div class="hint" id="provNote" style="margin-top:6px"></div>
+  <label id="keyLabel">מפתח API</label>
+  <input id="provKey" type="password" placeholder="">
+  <label>מודל</label>
+  <div class="keyrow"><select id="provModel"><option value="">(אוטומטי)</option></select><button onclick="loadModels()">טען רשימה</button></div>
   <div class="btns"><button class="primary" onclick="saveSettings()">שמור</button><button onclick="hide('mSettings')">ביטול</button></div>
 </div></div>
 
@@ -241,8 +227,8 @@ function renderEditors(){
     `האפליקציה כותבת קובץ ייבוא. ב-${ed.display}: ${ed.hint}`;
   $('btnOpen').textContent = `▶ פתח ב-${ed.display.replace(' (export all formats)','')}`;
   $('btnOpen').style.display = ed.id==='finalcut' || ed.id==='other' ? 'none' : '';
-  const p = state.provider==='gemini' ? 'Gemini' : 'Claude';
-  $('provpill').textContent = `AI: ${p}`;
+  const pi = provInfo(state.provider);
+  $('provpill').textContent = `AI: ${pi ? pi.display.replace(' (free models)','').replace(/ \(.*\)/,'') : state.provider}`;
   $('provpill').className = 'pill ' + (state.hasKey ? 'ok' : 'run');
 }
 $('editor').onchange = async () => {
@@ -340,35 +326,33 @@ async function attachFolder(){ const f=await api.pick_folder(); if(f) insert(`"$
 async function attachFiles(){ const fs=await api.pick_files(); if(fs?.length) insert(fs.map(f=>`"${f}"`).join(' ')) }
 function insert(s){ const i=$('input'); i.value = (i.value ? i.value.trimEnd()+' ' : '') + s + ' '; i.focus(); autoGrow() }
 
-function pickProvider(p){
-  provider=p;
-  $('tabClaude').classList.toggle('on', p==='claude'); $('tabGemini').classList.toggle('on', p==='gemini');
-  $('boxClaude').style.display = p==='claude' ? '' : 'none'; $('boxGemini').style.display = p==='gemini' ? '' : 'none';
+function provInfo(id){ return state?.providers.find(p => p.id === id) }
+function pickProvider(id){
+  provider=id; const p=provInfo(id); $('provSel').value=id;
+  $('provNote').textContent = p.note;
+  $('keyLabel').innerHTML = `מפתח API — מ-<a onclick="api.open_url('${p.keyUrl}')">${esc(new URL(p.keyUrl).host)}</a>`;
+  $('provKey').value=''; $('provKey').placeholder = p.hasKey ? 'נשמר ✓ (השאר ריק כדי לא לשנות)' : 'הדבק כאן את המפתח';
+  const sel=$('provModel'); sel.innerHTML='<option value="">(אוטומטי — הכי מתאים)</option>';
+  if(p.model){ sel.add(new Option(p.model, p.model)); sel.value=p.model }
 }
 function showSettings(){
-  $('claudeKey').value=''; $('geminiKey').value='';
-  $('claudeKey').placeholder = state?.hasClaude ? 'נשמר ✓ (השאר ריק כדי לא לשנות)' : 'sk-ant-...';
-  $('geminiKey').placeholder = state?.hasGemini ? 'נשמר ✓ (השאר ריק כדי לא לשנות)' : 'AIza...';
-  $('claudeModel').value = state?.claudeModel || 'claude-opus-5-5';
-  if(state?.geminiModel && ![...$('geminiModel').options].some(o=>o.value===state.geminiModel))
-    $('geminiModel').add(new Option(state.geminiModel, state.geminiModel));
-  $('geminiModel').value = state?.geminiModel || '';
-  pickProvider(state?.provider || 'claude'); show('mSettings');
+  $('provSel').innerHTML = state.providers.map(p => `<option value="${p.id}">${esc(p.display)}${p.free?' — חינם':' — בתשלום'}${p.hasKey?' ✓':''}</option>`).join('');
+  pickProvider(state.provider || 'gemini'); show('mSettings');
 }
-async function loadGemini(){
+async function loadModels(){
   try{
-    const list = await api.gemini_models($('geminiKey').value.trim());
-    const sel=$('geminiModel'); const keep=sel.value;
-    sel.innerHTML='<option value="">(אוטומטי — הכי חדש)</option>' + list.map(m=>`<option>${esc(m)}</option>`).join('');
-    sel.value = list.includes(keep) ? keep : '';
+    const list = await api.list_models(provider, $('provKey').value.trim());
+    const sel=$('provModel'); const keep=sel.value;
+    sel.innerHTML='<option value="">(אוטומטי — הכי מתאים)</option>' + list.map(m=>`<option>${esc(m)}</option>`).join('');
+    sel.value = list.includes(keep) ? keep : (list[0] || '');
+    if(!list.length) alert('לא נמצאו מודלים מתאימים');
   }catch(e){ alert(e.message) }
 }
 async function saveSettings(){
   try{
-    state = await api.save_settings({ provider, claudeKey:$('claudeKey').value.trim(), geminiKey:$('geminiKey').value.trim(),
-      claudeModel:$('claudeModel').value, geminiModel:$('geminiModel').value });
+    state = await api.save_settings({ provider, key:$('provKey').value.trim(), model:$('provModel').value });
     hide('mSettings'); renderEditors();
-    add('msg sys', state.hasKey ? `נשמר ✓ — עובד עם ${provider==='gemini'?'Gemini':'Claude'}` : 'חסר מפתח API לספק שנבחר');
+    add('msg sys', state.hasKey ? `נשמר ✓ — עובד עם ${esc(provInfo(provider).display)}` : 'חסר מפתח API לשירות שנבחר');
   }catch(e){ alert(e.message) }
 }
 function showNewProject(){ $('newName').value=''; show('mNew'); $('newName').focus() }

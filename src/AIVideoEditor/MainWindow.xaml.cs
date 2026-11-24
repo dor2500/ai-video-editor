@@ -82,11 +82,18 @@ public partial class MainWindow : Window
     Agent EnsureAgent()
     {
         var st = Settings.Current;
-        var gm = st.GeminiModel is { Length: > 0 } g ? g : "gemini-2.5-pro";
-        var cm = st.ClaudeModel is { Length: > 0 } c ? c : "claude-opus-5-5";
-        var sig = st.Provider == "gemini" ? $"g|{gm}|{st.GeminiKey.GetHashCode()}" : $"c|{cm}|{st.ClaudeKey.GetHashCode()}";
+        var model = st.ModelFor(st.Provider);
+        var key = st.KeyFor(st.Provider);
+        var sig = $"{st.Provider}|{model}|{key.GetHashCode()}";
         if (agent != null && sig == providerSig) return agent;
-        IAiProvider prov = st.Provider == "gemini" ? new GeminiProvider(st.GeminiKey, gm) : new ClaudeProvider(st.ClaudeKey, cm);
+        IAiProvider prov = st.Provider switch
+        {
+            "gemini" => new GeminiProvider(key, model is { Length: > 0 } ? model : "gemini-2.5-flash"),
+            "claude" => new ClaudeProvider(key, model is { Length: > 0 } ? model : "claude-opus-5-5"),
+            _ => Services.Get(st.Provider) is { } svc
+                ? new OpenAiCompatProvider(svc, key, model is { Length: > 0 } ? model : svc.PreferredModels[0])
+                : throw new EditException("Unknown AI provider " + st.Provider),
+        };
         providerSig = sig;
         if (agent == null)
         {
@@ -104,8 +111,11 @@ public partial class MainWindow : Window
         var ag = st.HasKeyFor(st.Provider) ? EnsureAgent() : null;
         return new
         {
-            version = Version, provider = st.Provider, hasClaude = st.ClaudeKey != "", hasGemini = st.GeminiKey != "",
-            hasKey = st.HasKeyFor(st.Provider), claudeModel = st.ClaudeModel, geminiModel = st.GeminiModel, editor = st.Editor,
+            version = Version, provider = st.Provider, hasKey = st.HasKeyFor(st.Provider), editor = st.Editor,
+            providers = Providers().Select(p => new
+            {
+                p.id, p.display, p.keyUrl, p.note, p.free, hasKey = st.HasKeyFor(p.id), model = st.ModelFor(p.id),
+            }),
             editors = Editors.All.Select(e => new { id = e.Id, display = e.Display, installed = e.Installed, exportOnly = e.IsExportOnly, hint = e.ImportHint }),
             project = ag?.Project?.Name, projectPath = ag?.Project?.MainFile,
         };
@@ -120,20 +130,24 @@ public partial class MainWindow : Window
             case "save_settings":
             {
                 var o = a[0]!.AsObject();
-                if (o["provider"]?.ToString() is { Length: > 0 } p) st.Provider = p;
-                if (o["claudeKey"]?.ToString() is { Length: > 0 } ck) st.ClaudeKey = ck;
-                if (o["geminiKey"]?.ToString() is { Length: > 0 } gk) st.GeminiKey = gk;
-                if (o["claudeModel"]?.ToString() is { Length: > 0 } cm) st.ClaudeModel = cm;
-                if (o["geminiModel"]?.ToString() is { } gmod) st.GeminiModel = gmod;
-                if (st.Provider == "gemini" && st.GeminiModel == "" && st.GeminiKey != "")
-                    try { st.GeminiModel = (await GeminiProvider.ListModels(st.GeminiKey)).FirstOrDefault() ?? ""; } catch { }
+                var p = o["provider"]?.ToString() is { Length: > 0 } pp ? pp : st.Provider;
+                st.Provider = p;
+                if (o["key"]?.ToString() is { Length: > 0 } key) st.SetKey(p, key);
+                if (o["model"]?.ToString() is { } model) st.SetModel(p, model);
+                if (st.ModelFor(p) == "" && st.HasKeyFor(p) && p != "claude")
+                    try { st.SetModel(p, (await ListModels(p, st.KeyFor(p))).FirstOrDefault() ?? ""); } catch { }
                 st.Save();
                 agent?.NewChat();
                 if (agent != null) EnsureAgent();
                 return Status();
             }
-            case "gemini_models":
-                return await GeminiProvider.ListModels(A(a, 0) is { Length: > 0 } k ? k : st.GeminiKey);
+            case "list_models":
+            {
+                var p = A(a, 0);
+                var key = A(a, 1) is { Length: > 0 } k ? k : st.KeyFor(p);
+                if (key == "") throw new EditException("Enter an API key first");
+                return await ListModels(p, key);
+            }
             case "set_editor":
             {
                 if (busy) throw new EditException("Wait for the current request to finish");
@@ -257,6 +271,23 @@ public partial class MainWindow : Window
         throw new InvalidOperationException("Unknown method " + method);
     }
 
+    static readonly (string id, string display, string keyUrl, string note, bool free)[] Paid =
+    [
+        ("claude", "Claude (Anthropic)", "https://console.anthropic.com/settings/keys", "Paid (pay per use). Best at editing tasks.", false),
+        ("gemini", "Gemini (Google)", "https://aistudio.google.com/apikey",
+            "Free tier for Flash models (no card). Pro models need billing. Free-tier prompts may be used by Google.", true),
+    ];
+
+    static IEnumerable<(string id, string display, string keyUrl, string note, bool free)> Providers() =>
+        Paid.Concat(Services.Free.Select(s => (s.Id, s.Display, s.KeyUrl, s.FreeNote, true)));
+
+    static async Task<List<string>> ListModels(string provider, string key) => provider switch
+    {
+        "gemini" => await GeminiProvider.ListModels(key),
+        "claude" => ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-2"],
+        _ => await OpenAiCompatProvider.ListModels(Services.Get(provider) ?? throw new EditException("Unknown provider"), key),
+    };
+
     object Projects() => Editors.Projects(Settings.Current.Editor)
         .Select(p => new { name = p.Name, path = p.Path, duration = p.DurationS, modified = p.Modified.ToString("g") });
 
@@ -265,8 +296,12 @@ public partial class MainWindow : Window
         var n = ex.GetType().Name;
         if (n.Contains("Unauthorized") || n.Contains("Authentication") || ex is AiException { Status: 401 or 403 })
             return "מפתח ה-API לא תקין. פתח הגדרות והזן מפתח חדש.";
+        if (ex.Message.Contains("credit balance", StringComparison.OrdinalIgnoreCase))
+            return "נגמר הקרדיט בחשבון Anthropic. אפשר לעבור בהגדרות לשירות חינמי (Gemini Flash, Groq, OpenRouter, Cerebras, Mistral).";
+        if (ex is AiException { Status: 429 } && (ex.Message.Contains("limit: 0") || ex.Message.Contains("free_tier", StringComparison.OrdinalIgnoreCase)))
+            return "המודל שנבחר לא כלול במסלול החינמי. בהגדרות בחר מודל אחר (ב-Gemini: מודל flash).";
         if (n.Contains("RateLimit") || ex is AiException { Status: 429 })
-            return "הגעת למגבלת שימוש של ה-API, נסה שוב בעוד רגע.";
+            return "הגעת למגבלת השימוש של השירות. חכה דקה (או עד מחר במגבלה יומית), או עבור בהגדרות לשירות חינמי אחר.";
         if (ex is HttpRequestException || n.Contains("Connection"))
             return "אין חיבור לאינטרנט / לשרת ה-AI.";
         return ex.Message;

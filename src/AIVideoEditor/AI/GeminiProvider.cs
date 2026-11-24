@@ -125,10 +125,11 @@ public sealed class GeminiProvider(string apiKey, string model) : IAiProvider
         {
             var m = Regex.Match(n, @"gemini-(\d+(?:\.\d+)?)");
             double v = m.Success ? double.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : 0;
-            int tier = n.Contains("pro") ? 3 : n.Contains("flash") && !n.Contains("lite") ? 2 : 1;
+            // Flash first: on the free tier Pro models get no requests
+            int tier = n.Contains("flash") && !n.Contains("lite") ? 3 : n.Contains("pro") ? 2 : 1;
             return (v, tier, n.Contains("preview") || n.Contains("exp") ? 0 : 1);
         }
-        return names.OrderByDescending(n => Rank(n).ver).ThenByDescending(n => Rank(n).tier).ThenByDescending(n => Rank(n).stable).ToList();
+        return names.OrderByDescending(n => Rank(n).tier).ThenByDescending(n => Rank(n).stable).ThenByDescending(n => Rank(n).ver).ToList();
     }
 }
 

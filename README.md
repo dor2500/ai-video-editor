@@ -14,10 +14,18 @@ Chat with an AI that edits your video project for you: *"take all the photos fro
 
 ### התקנה
 1. הורידו את `AIVideoEditor-Setup-<גרסה>.exe` מ-[Releases](https://github.com/dor2500/ai-video-editor/releases/latest) והריצו. לא צריך הרשאות מנהל.
-2. בפתיחה הראשונה הזינו מפתח API:
-   - **Claude** — מ-[console.anthropic.com](https://console.anthropic.com/settings/keys), או
-   - **Gemini** — מ-[aistudio.google.com](https://aistudio.google.com/apikey).
-   המפתחות נשמרים מוצפנים (Windows DPAPI) רק במחשב שלכם.
+2. בפתיחה הראשונה בוחרים שירות AI ומזינים מפתח API. המפתחות נשמרים מוצפנים (Windows DPAPI) רק במחשב שלכם.
+
+| שירות | מחיר | מפתח |
+|---|---|---|
+| **Gemini (Google)** — ברירת מחדל | חינם למודלי Flash | [aistudio.google.com](https://aistudio.google.com/apikey) |
+| **Groq** | חינם (מגבלה יומית) | [console.groq.com](https://console.groq.com/keys) |
+| **OpenRouter** | חינם למודלים עם `:free` | [openrouter.ai](https://openrouter.ai/settings/keys) |
+| **Cerebras** | חינם (מכסה יומית) | [cloud.cerebras.ai](https://cloud.cerebras.ai/) |
+| **Mistral** | חינם (מסלול Experiment) | [console.mistral.ai](https://console.mistral.ai/api-keys) |
+| **Claude (Anthropic)** | בתשלום, הכי מדויק | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
+
+> במסלולים החינמיים יש מגבלת בקשות. כל עריכה צורכת כמה קריאות, אז אם נגמרת המכסה של שירות אחד, אפשר לעבור לשירות אחר בהגדרות. מודלים חינמיים טועים יותר מ-Claude.
 
 יש גם גרסה ניידת (`portable.exe`) שלא דורשת התקנה.
 
@@ -56,7 +64,7 @@ Chat with an AI that edits your video project for you: *"take all the photos fro
 A Windows app with a chat window. Describe the edit; the AI (Claude or Gemini) changes the project in your editor.
 
 ### Install
-Download `AIVideoEditor-Setup-<version>.exe` from [Releases](https://github.com/dor2500/ai-video-editor/releases/latest). It installs per user and needs no admin rights. A portable exe is also attached. On first start, enter a **Claude** ([console.anthropic.com](https://console.anthropic.com/settings/keys)) or **Gemini** ([aistudio.google.com](https://aistudio.google.com/apikey)) API key. Keys are stored encrypted with Windows DPAPI.
+Download `AIVideoEditor-Setup-<version>.exe` from [Releases](https://github.com/dor2500/ai-video-editor/releases/latest). It installs per user and needs no admin rights. A portable exe is also attached. On first start, pick an AI service and paste its API key. Keys are stored encrypted with Windows DPAPI. Free services: **Gemini** Flash models (the default), **Groq**, **OpenRouter** `:free` models, **Cerebras** and **Mistral** (Experiment plan). Paid: **Claude**. Free tiers have request limits, and an edit takes several model calls.
 
 ### Editors
 - **Direct editing:** CapCut (draft JSON), Shotcut (`.mlt`), OpenShot (`.osp`).
@@ -77,7 +85,8 @@ src/AIVideoEditor/
   Core/CapCut/     CapCut draft engine + catalog from CapCut's cache
   Core/Timeline/   editor-neutral timeline model and editing operations
   Core/Formats/    Shotcut MLT, OpenShot, FCPXML, FCP7 XML, OTIO, EDL
-  AI/              tool definitions, agent loop, Claude (Anthropic SDK) and Gemini (REST) providers
+  AI/              tool definitions, agent loop; providers: Claude (Anthropic SDK), Gemini (REST),
+                   OpenAI-compatible (Groq, OpenRouter, Cerebras, Mistral)
   wwwroot/ui.html  chat UI (WebView2)
 installer/Setup/   NativeAOT per-user installer
 tests/SelfTest/    engine and format tests (no AI calls)
