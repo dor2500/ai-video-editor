@@ -33,7 +33,19 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
 {
     public EditorProject? Project { get; private set; }
     public string EditorId { get; set; } = Settings.Current.Editor;
-    public IAiProvider Provider { get; set; } = provider;
+    IAiProvider provider = provider;
+    public IAiProvider Provider
+    {
+        get => provider;
+        set { provider = value; lastContextKey = ""; }
+    }
+
+    /// <summary>Forget the conversation (the project stays open).</summary>
+    public void NewChat()
+    {
+        provider.Reset();
+        lastContextKey = "";
+    }
     CancellationTokenSource? cts;
     bool snapped;
     string request = "";
@@ -69,7 +81,7 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
         Settings.Current.Editor = editorId;
         Settings.Current.LastProject = path;
         Settings.Current.Save();
-        Provider.Reset();
+        NewChat();
         emit("project", new { name = Project.Name, path, editor = editorId });
     }
 
@@ -90,7 +102,7 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
         if (editorId == EditorId) return;
         EditorId = editorId;
         Project = null;
-        Provider.Reset();
+        NewChat();
     }
 
     public void NoteUndo(string label)
@@ -98,22 +110,52 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
         Provider.AddUser($"[The user pressed UNDO in the app; the request '{label}' was reverted. Re-read the project before editing.]");
     }
 
+    // The system prompt and the tool list must stay byte-identical for the whole conversation:
+    // Claude's thinking blocks are bound to the prompt they were produced with, and caching needs a stable prefix.
+    // Everything that changes (editor, project, editor notes) goes into the conversation itself.
+    static readonly List<ToolDef> AllTools = ToolDefs.For(ToolDefs.Project.Select(t => t.Name).ToHashSet());
+    string lastContextKey = "";
+
+    string Context()
+    {
+        var ed = Editors.Get(EditorId);
+        var key = $"{EditorId}|{Project?.MainFile}";
+        var head = Project != null ? $"[Editor: {ed.Display} · Project: {Project.Name}]" : $"[Editor: {ed.Display} · no project open yet]";
+        if (key == lastContextKey) return head + "\n";
+        lastContextKey = key;
+        var notes = Project?.Notes is { Length: > 0 } n ? n : ed.IsExportOnly ? $"{ed.Display} is edited through exported import files." : "";
+        var unsupported = Project == null ? "" :
+            string.Join(", ", ToolDefs.Project.Select(t => t.Name).Where(t => !Project.SupportedTools.Contains(t)));
+        return head + (notes != "" ? "\n[Editor notes: " + notes + "]" : "") +
+               (unsupported != "" ? $"\n[Not available in this editor: {unsupported}]" : "") + "\n";
+    }
+
     public async Task SendAsync(string text)
     {
         request = text;
         snapped = false;
         cts = new CancellationTokenSource();
-        var ed = Editors.Get(EditorId);
-        var ctx = Project != null ? $"[Editor: {ed.Display} · Project: {Project.Name}]\n" : $"[Editor: {ed.Display} · no project open yet]\n";
-        Provider.AddUser(ctx + text);
-        var system = SystemBase + "\n\nCurrent editor: " + ed.Display + ". " + (Project?.Notes ?? "");
+        var userText = Context() + text;
+        Provider.AddUser(userText);
+        bool retried = false;
         for (int step = 0; step < 40; step++)
         {
             if (cts.IsCancellationRequested) { emit("assistant", "⏹ נעצר."); return; }
-            var tools = ToolDefs.For(Project?.SupportedTools);
             AiTurn turn;
-            try { turn = await Provider.NextAsync(system, tools, cts.Token); }
+            try { turn = await Provider.NextAsync(SystemBase, AllTools, cts.Token); }
             catch (OperationCanceledException) { emit("assistant", "⏹ נעצר."); return; }
+            catch (Exception e) when (!retried && IsHistoryMismatch(e))
+            {
+                // The stored conversation no longer matches what the API expects (e.g. an older app version changed
+                // the prompt mid-chat). Start a fresh conversation with this request instead of failing.
+                retried = true;
+                Provider.Reset();
+                lastContextKey = "";
+                Provider.AddUser(Context() + text);
+                emit("info", "השיחה התחילה מחדש בגלל שגיאה טכנית — ממשיך בבקשה.");
+                step--;
+                continue;
+            }
             foreach (var t in turn.Texts.Where(t => !string.IsNullOrWhiteSpace(t))) emit("assistant", t);
             if (turn.Stop == "refusal") { emit("error", "The model declined this request."); return; }
             if (turn.Stop == "max_tokens" && turn.Calls.Count == 0) { emit("error", "The reply was cut off (max tokens)."); return; }
@@ -145,6 +187,15 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
         emit("error", "Too many steps — stopped.");
     }
 
+    static bool IsHistoryMismatch(Exception e)
+    {
+        var m = e.Message;
+        return m.Contains("signature", StringComparison.OrdinalIgnoreCase) && m.Contains("thinking", StringComparison.OrdinalIgnoreCase)
+               || m.Contains("bound to a different conversation", StringComparison.OrdinalIgnoreCase)
+               || m.Contains("thought_signature", StringComparison.OrdinalIgnoreCase)
+               || m.Contains("thought signature", StringComparison.OrdinalIgnoreCase);
+    }
+
     (string text, List<(string, byte[])> images, bool mutated) Run(string name, JsonObject args)
     {
         var a = new Args(args);
@@ -160,13 +211,13 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
                         ?? Editors.Projects(EditorId).FirstOrDefault(x => x.Name.Contains(n, StringComparison.OrdinalIgnoreCase))
                         ?? throw new EditException($"No project named '{n}'");
                 SwitchKeepChat(p.Path);
-                return (J(Project!.Overview()), [], false);
+                return (J(new JsonObject { ["opened"] = Project!.Overview(), ["context"] = Context() }), [], false);
             }
             case "create_project":
             {
                 var path = Editors.Create(EditorId, a.Req("name"), a.S("ratio", "16:9"));
                 SwitchKeepChat(path);
-                return (J(new JsonObject { ["created"] = Project!.Name }), [], false);
+                return (J(new JsonObject { ["created"] = Project!.Name, ["context"] = Context() }), [], false);
             }
             case "list_folder_media":
                 return (J(Media.ListFolder(a.Req("folder"), a.B("recursive", false))), [], false);
@@ -182,6 +233,8 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
             throw new EditException("No project is open. Ask the user to pick one, or use list_projects / switch_project / create_project.");
         if (name == "get_project_overview") return (J(Project.Overview()), [], false);
         if (name == "undo_last_request") return (J(new JsonObject { ["undone"] = Project.Undo() }), [], false);
+        if (ToolDefs.Project.Any(t => t.Name == name) && !Project.SupportedTools.Contains(name))
+            throw new EditException($"'{name}' is not available in {Editors.Get(EditorId).Display}.");
         bool mut = ToolDefs.Mutating.Contains(name);
         if (mut && !snapped)
         {

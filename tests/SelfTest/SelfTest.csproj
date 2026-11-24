@@ -6,9 +6,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <RollForward>LatestMajor</RollForward>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\src\AIVideoEditor\Core\**\*.cs" Link="Core\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\AIVideoEditor\AI\**\*.cs" Link="AI\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\AIVideoEditor\GlobalUsings.cs" Link="GlobalUsings.cs" />
+    <PackageReference Include="Anthropic" Version="13.13.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="11.0.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="11.0.0" />
   </ItemGroup>

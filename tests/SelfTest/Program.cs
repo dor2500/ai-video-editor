@@ -155,6 +155,47 @@ if (capcut != null)
     Check(back.ClaudeKey == "sk-ant-selftest-secret" && back.GeminiKey == "AIza-selftest-secret", "encrypted keys round-trip");
 }
 
+// ---- agent: system prompt and tools must not change during a conversation (thinking blocks are bound to them)
+{
+    Console.WriteLine("[Agent]");
+    // the agent writes the user's real settings file; keep a copy and put it back afterwards
+    var settingsFile = Path.Combine(Paths.AppData, "settings.json");
+    var settingsBackup = File.Exists(settingsFile) ? File.ReadAllText(settingsFile) : null;
+    try {
+    var dir = Path.Combine(work, "agent");
+    Directory.CreateDirectory(dir);
+    var ed = Editors.Get("shotcut");
+    var f1 = Path.Combine(dir, "one.mlt"); var f2 = Path.Combine(dir, "two.mlt");
+    new TimelineProject(ed, f1); new TimelineProject(ed, f2);
+    Settings.Current.AddRecent("shotcut|" + f1); Settings.Current.AddRecent("shotcut|" + f2);
+    var fake = new FakeProvider();
+    var events = new List<string>();
+    var agent = new AIVideoEditor.AI.Agent(fake, (e, _) => events.Add(e));
+    agent.Open("shotcut", f1);
+    fake.Script.Enqueue([new("c1", "get_project_overview", [])]);
+    fake.Script.Enqueue([new("c2", "switch_project", new JsonObject { ["name"] = "two" })]);
+    fake.Script.Enqueue([new("c3", "add_media", new JsonObject { ["paths"] = new JsonArray(gen) })]);
+    fake.Script.Enqueue([]);
+    await agent.SendAsync("first request");
+    fake.Script.Enqueue([new("c4", "get_project_overview", [])]);
+    fake.Script.Enqueue([]);
+    await agent.SendAsync("second request");
+    Check(fake.Systems.Count >= 6, $"{fake.Systems.Count} model calls");
+    Check(fake.Systems.Distinct().Count() == 1, "system prompt identical on every call");
+    Check(fake.ToolSets.Distinct().Count() == 1, "tool list identical on every call");
+    Check(agent.Project!.MainFile == f2 && new TimelineProject(ed, f2).Doc.Tracks.SelectMany(t => t.Clips).Count() == 4,
+        "switch_project + add_media edited the second project");
+    // a thinking-binding error from the API is recovered by restarting the conversation once
+    fake.FailNext = "messages.9.content.0: Invalid `signature` in `thinking` block. The block is bound to a different conversation.";
+    fake.Script.Enqueue([]);
+    await agent.SendAsync("third request");
+    Check(events.Contains("info") && !events.Contains("error"), "signature error recovered automatically");
+    } finally {
+        if (settingsBackup != null) File.WriteAllText(settingsFile, settingsBackup);
+        else File.Delete(settingsFile);
+    }
+}
+
 // ---- optional: leave a finished demo project (used for the README screenshot)
 var demoIdx = Array.IndexOf(args, "--demo");
 if (demoIdx >= 0 && demoIdx + 1 < args.Length)
@@ -209,4 +250,24 @@ static void CopyDir(string src, string dst)
     Directory.CreateDirectory(dst);
     foreach (var f in Directory.GetFiles(src)) File.Copy(f, Path.Combine(dst, Path.GetFileName(f)), true);
     foreach (var d in Directory.GetDirectories(src)) CopyDir(d, Path.Combine(dst, Path.GetFileName(d)));
+}
+
+sealed class FakeProvider : AIVideoEditor.AI.IAiProvider
+{
+    public Queue<List<AIVideoEditor.AI.ToolCall>> Script { get; } = new();
+    public List<string> Systems { get; } = [];
+    public List<string> ToolSets { get; } = [];
+    public string? FailNext { get; set; }
+    public string Display => "fake";
+    public void Reset() { }
+    public void AddUser(string text) { }
+    public void AddToolResults(List<AIVideoEditor.AI.ToolOutput> results) { }
+    public Task<AIVideoEditor.AI.AiTurn> NextAsync(string system, List<AIVideoEditor.AI.ToolDef> tools, CancellationToken ct)
+    {
+        if (FailNext is { } msg) { FailNext = null; throw new InvalidOperationException(msg); }
+        Systems.Add(system);
+        ToolSets.Add(string.Join(",", tools.Select(t => t.Name + ":" + t.Properties.ToJsonString())));
+        var calls = Script.Count > 0 ? Script.Dequeue() : [];
+        return Task.FromResult(new AIVideoEditor.AI.AiTurn(calls.Count == 0 ? ["done"] : [], calls, "end_turn"));
+    }
 }

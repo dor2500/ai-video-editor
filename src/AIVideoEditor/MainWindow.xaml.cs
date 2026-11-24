@@ -128,7 +128,7 @@ public partial class MainWindow : Window
                 if (st.Provider == "gemini" && st.GeminiModel == "" && st.GeminiKey != "")
                     try { st.GeminiModel = (await GeminiProvider.ListModels(st.GeminiKey)).FirstOrDefault() ?? ""; } catch { }
                 st.Save();
-                agent?.Provider.Reset();
+                agent?.NewChat();
                 if (agent != null) EnsureAgent();
                 return Status();
             }
@@ -208,7 +208,7 @@ public partial class MainWindow : Window
                 agent.NoteUndo(label);
                 return new { label };
             }
-            case "new_chat": agent?.Provider.Reset(); return true;
+            case "new_chat": agent?.NewChat(); return true;
             case "stop": agent?.Stop(); return true;
             case "pick_folder":
             {

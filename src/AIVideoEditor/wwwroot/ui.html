@@ -331,6 +331,7 @@ function onEvent(kind, data){
   else if(kind==='tool'){ const d=add('tool', `🔧 ${esc(TOOL_HE[data.name]||data.name)}<pre>${esc(JSON.stringify(data.input,null,1))}</pre>`); d.onclick=()=>d.classList.toggle('open') }
   else if(kind==='changed'){ refreshOverview(); if(data) add('msg sys', esc(data)) }
   else if(kind==='error') add('msg err', esc(data));
+  else if(kind==='info') add('msg sys', esc(data));
   else if(kind==='project'){ current=data.path; $('ptitle').textContent=data.name; refreshOverview(); loadProjects() }
   else if(kind==='done'){ setBusy(false); refreshOverview() }
 }
