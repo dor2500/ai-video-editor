@@ -1,0 +1,11 @@
+bin/
+obj/
+artifacts/
+dist/
+*.log
+*.user
+.vs/
+.vscode/
+__pycache__/
+legacy/python-prototype/build/
+legacy/python-prototype/dist/

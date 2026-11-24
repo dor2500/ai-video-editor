@@ -1,0 +1,6 @@
+anthropic>=2.13
+pywebview>=6.2
+pycapcut==0.0.4
+pymediainfo
+Pillow
+pyinstaller>=6.22

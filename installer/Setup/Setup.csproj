@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>AIVideoEditor-Setup</AssemblyName>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <OptimizationPreference>Size</OptimizationPreference>
+    <ApplicationIcon>..\..\src\AIVideoEditor\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>2.0.0</Version>
+    <Product>AI Video Editor Setup</Product>
+    <PayloadPath Condition="'$(PayloadPath)' == ''">..\..\artifacts\app\AIVideoEditor.exe</PayloadPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(PayloadPath)" LogicalName="payload.exe" />
+  </ItemGroup>
+</Project>

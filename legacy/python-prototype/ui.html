@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>CapCut AI Editor</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a; --text:#e8eaf0; --muted:#8b93a7;
+  --accent:#22d3c5; --accent2:#0ea5a0; --user:#1f3a5f; --warn:#f59e0b; --err:#ef4444;
+  --k-video:#3b82f6; --k-photo:#8b5cf6; --k-audio:#10b981; --k-text:#f59e0b; --k-effect:#ec4899; --k-filter:#ec4899;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.5 "Segoe UI","Arial",sans-serif}
+button{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent2);border-color:var(--accent2);color:#fff;font-weight:600}
+button.primary:hover{background:var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+.app{display:grid;grid-template-columns:260px 1fr;height:100vh}
+aside{background:var(--panel);border-inline-end:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+aside h2{font-size:13px;color:var(--muted);margin:14px 14px 6px;font-weight:600;letter-spacing:.3px}
+.plist{overflow:auto;flex:1;padding:0 8px 8px}
+.pitem{padding:8px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+.pitem:hover{background:var(--panel2)}
+.pitem.on{background:#13343a;outline:1px solid var(--accent2)}
+.pitem small{color:var(--muted)}
+.side-btns{display:flex;flex-direction:column;gap:6px;padding:10px;border-top:1px solid var(--line)}
+main{display:flex;flex-direction:column;min-width:0;min-height:0}
+header{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+header .title{font-weight:700;font-size:16px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{font-size:12px;padding:3px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.pill.run{color:var(--warn);border-color:var(--warn)}
+.pill.ok{color:var(--accent);border-color:var(--accent2)}
+.timeline{padding:8px 16px;border-bottom:1px solid var(--line);background:#12151b;max-height:170px;overflow:auto}
+.trow{display:flex;align-items:center;gap:8px;height:20px;margin:3px 0}
+.tlabel{width:70px;font-size:11px;color:var(--muted);direction:ltr;text-align:left;flex:none}
+.tbar{position:relative;flex:1;height:16px;background:#0b0d11;border-radius:4px;direction:ltr}
+.seg{position:absolute;top:1px;height:14px;border-radius:3px;opacity:.9;font-size:9px;color:#fff;overflow:hidden;white-space:nowrap;padding:0 3px;border-inline:1px solid #0008}
+.tinfo{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;margin-bottom:4px}
+.chat{flex:1;overflow:auto;padding:18px 18px 8px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:80%;padding:10px 14px;border-radius:14px;white-space:pre-wrap;word-wrap:break-word}
+.msg.user{align-self:flex-start;background:var(--user);border-end-start-radius:4px}
+.msg.bot{align-self:flex-end;background:var(--panel2);border:1px solid var(--line);border-end-end-radius:4px}
+.msg.err{align-self:center;background:#3a1416;border:1px solid var(--err);color:#fecaca}
+.msg.sys{align-self:center;color:var(--muted);font-size:12px;background:none;padding:2px}
+.tool{align-self:flex-end;font-size:12px;color:var(--muted);background:#141821;border:1px dashed var(--line);border-radius:8px;padding:3px 10px;max-width:80%;cursor:pointer}
+.tool pre{display:none;margin:4px 0 0;direction:ltr;text-align:left;white-space:pre-wrap;font-size:11px}
+.tool.open pre{display:block}
+.typing{align-self:flex-end;color:var(--muted);font-size:13px}
+.typing span{animation:blink 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+.composer{border-top:1px solid var(--line);padding:10px 16px 14px;background:var(--panel)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.chip{font-size:12px;padding:3px 10px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);cursor:pointer;color:var(--muted)}
+.chip:hover{color:var(--text);border-color:var(--accent2)}
+.row{display:flex;gap:8px;align-items:flex-end}
+textarea{flex:1;resize:none;min-height:44px;max-height:180px}
+.modal-bg{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:9}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;width:min(460px,92vw)}
+.modal h3{margin:0 0 8px}
+.modal p{color:var(--muted);margin:6px 0 14px}
+.modal .btns{display:flex;gap:8px;justify-content:flex-start;flex-wrap:wrap;margin-top:14px}
+.modal input,.modal select{width:100%;margin-top:6px}
+a{color:var(--accent)}
+@media (max-width:900px){.app{grid-template-columns:200px 1fr} header{flex-wrap:wrap}}
+.empty{margin:auto;text-align:center;color:var(--muted);max-width:520px}
+.empty h1{color:var(--text);font-size:22px;margin-bottom:6px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h2>הפרויקטים שלך ב-CapCut</h2>
+    <div class="plist" id="plist"></div>
+    <div class="side-btns">
+      <button onclick="showNewProject()">＋ פרויקט חדש</button>
+      <button onclick="loadProjects()">⟳ רענן רשימה</button>
+      <button onclick="showKey()">⚙ הגדרות (מפתח API)</button>
+    </div>
+  </aside>
+  <main>
+    <header>
+      <div class="title" id="ptitle">לא נבחר פרויקט</div>
+      <span class="pill" id="ccstatus" title="CapCut חייב להיות סגור בזמן עריכה">CapCut: ?</span>
+      <button onclick="closeCapcut()" id="btnClose" style="display:none">סגור CapCut</button>
+      <button onclick="openCapcut()" title="פתח את CapCut כדי לראות את התוצאה">▶ פתח ב-CapCut</button>
+      <button onclick="doUndo()" title="בטל את הבקשה האחרונה">↶ בטל</button>
+      <button onclick="newChat()" title="התחל שיחה חדשה (הפרויקט לא משתנה)">🗨 שיחה חדשה</button>
+    </header>
+    <div class="timeline" id="timeline" style="display:none"></div>
+    <div class="chat" id="chat">
+      <div class="empty" id="empty">
+        <h1>עורך הווידאו החכם שלך 🎬</h1>
+        <p>בחר פרויקט מהרשימה (או צור חדש) וכתוב מה לעשות, למשל:<br>
+        „קח את כל התמונות מהתיקייה <i>C:\Users\...\Pictures\טיול</i>, 4 שניות לכל תמונה, עם זום עדין ומעברי דהייה”<br>
+        „תוסיף את השיר מההורדות לכל אורך הסרטון עם fade בסוף”<br>
+        „תזיז את הכותרת למעלה ותגדיל אותה”</p>
+      </div>
+    </div>
+    <div class="composer">
+      <div class="chips">
+        <span class="chip" onclick="attachFolder()">📁 צרף תיקייה</span>
+        <span class="chip" onclick="attachFiles()">📎 צרף קבצים</span>
+        <span class="chip" onclick="quick('מה יש כרגע בפרויקט? תן סיכום קצר')">מה יש בפרויקט?</span>
+        <span class="chip" onclick="quick('תוסיף מעבר דהייה עדין בין כל הקליפים בטראק הראשי')">מעברים לכולם</span>
+        <span class="chip" onclick="quick('תוסיף תנועת זום/פאן עדינה לכל התמונות (Ken Burns), מתחלפת')">זום לתמונות</span>
+        <span class="chip" onclick="quick('תשתיק את הסאונד המקורי של הסרטונים בטראק הראשי')">השתק סאונד מקורי</span>
+      </div>
+      <div class="row">
+        <textarea id="input" rows="2" placeholder="כתוב מה לערוך…  (Enter לשליחה, Shift+Enter לשורה חדשה)"></textarea>
+        <button class="primary" id="send" onclick="send()">שלח</button>
+        <button id="stop" onclick="pywebview.api.stop()" style="display:none">עצור</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-bg" id="mKey"><div class="modal">
+  <h3>מפתח Claude API</h3>
+  <p>התוכנה משתמשת ב-Claude כדי להבין מה לערוך. הדבק מפתח API מ-<b>console.anthropic.com</b> → API Keys. המפתח נשמר רק במחשב הזה.</p>
+  <input id="keyInput" type="password" placeholder="sk-ant-...">
+  <div class="btns"><button class="primary" onclick="saveKey()">שמור</button><button onclick="hide('mKey')">ביטול</button></div>
+</div></div>
+
+<div class="modal-bg" id="mNew"><div class="modal">
+  <h3>פרויקט חדש</h3>
+  <input id="newName" placeholder="שם הפרויקט">
+  <select id="newRatio"><option value="16:9">16:9 – רחב (YouTube)</option><option value="9:16">9:16 – לאורך (TikTok/Reels)</option><option value="1:1">1:1 – ריבוע</option><option value="4:5">4:5 – אינסטגרם</option></select>
+  <div class="btns"><button class="primary" onclick="createProject()">צור</button><button onclick="hide('mNew')">ביטול</button></div>
+</div></div>
+
+<div class="modal-bg" id="mRun"><div class="modal">
+  <h3>CapCut פתוח</h3>
+  <p>כש-CapCut פתוח הוא עלול לדרוס את השינויים. לסגור אותו לפני העריכה? (CapCut שומר אוטומטית, לא יאבד כלום)</p>
+  <div class="btns">
+    <button class="primary" onclick="runChoice('close')">סגור CapCut והמשך</button>
+    <button onclick="runChoice('go')">המשך בכל זאת</button>
+    <button onclick="runChoice('cancel')">ביטול</button>
+  </div>
+</div></div>
+
+<script>
+let current = null, busy = false, pendingText = null, typingEl = null;
+const $ = id => document.getElementById(id);
+const COLORS = {video:'var(--k-video)', photo:'var(--k-photo)', audio:'var(--k-audio)', extract_music:'var(--k-audio)', text:'var(--k-text)', filter:'var(--k-filter)', video_effect:'var(--k-effect)', effect:'var(--k-effect)'};
+const TOOL_HE = {get_project_overview:'קורא את הפרויקט', list_folder_media:'סורק תיקייה', look_at_images:'מסתכל על תמונות', add_media:'מוסיף תמונות/סרטונים', add_audio:'מוסיף סאונד', add_text:'מוסיף טקסט', edit_segments:'עורך קטעים', move_segment:'מזיז קטע', delete_segments:'מוחק קטעים', split_segment:'חותך קטע', reorder_main_track:'מסדר מחדש', close_gaps:'סוגר רווחים', set_track_mute:'משתיק/מבטל השתקה', set_canvas:'משנה יחס מסך', search_catalog:'מחפש אפקט', set_transitions:'מוסיף מעברים', set_animations:'מוסיף אנימציה', add_motion:'מוסיף תנועה (זום/פאן)', add_filter_or_effect:'מוסיף פילטר/אפקט', set_audio_fade:'מגדיר fade', undo_last_request:'מבטל', list_projects:'רשימת פרויקטים', switch_project:'מחליף פרויקט', create_project:'יוצר פרויקט'};
+
+function hide(id){ $(id).style.display='none' }
+function show(id){ $(id).style.display='flex' }
+function esc(s){ return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) }
+function scrollDown(){ const c=$('chat'); c.scrollTop=c.scrollHeight }
+function add(cls, html){ $('empty') && $('empty').remove(); const d=document.createElement('div'); d.className=cls; d.innerHTML=html; if(typingEl && typingEl.parentNode){ $('chat').insertBefore(d, typingEl) } else $('chat').appendChild(d); scrollDown(); return d }
+
+function fmtTime(s){ s=Math.round(s); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0') }
+
+function renderTimeline(ov){
+  const tl=$('timeline');
+  if(!ov){ tl.style.display='none'; return }
+  tl.style.display='block';
+  const total=Math.max(ov.duration_s, 1);
+  let h=`<div class="tinfo"><span>${esc(ov.canvas)} · ${ov.fps}fps</span><span>אורך: ${fmtTime(ov.duration_s)}</span></div>`;
+  for(const t of ov.tracks){
+    h+=`<div class="trow"><div class="tlabel">${esc(t.track.replace(' (main)','★'))}${t.muted?' 🔇':''}</div><div class="tbar">`;
+    for(const s of t.segments){
+      const l=s.start/total*100, w=Math.max((s.end-s.start)/total*100, .3);
+      const label=s.text||s.file||s.name||'';
+      h+=`<div class="seg" title="${esc(s.id+' · '+label+' · '+s.start+'–'+s.end+'s')}" style="left:${l}%;width:${w}%;background:${COLORS[s.kind]||'#64748b'}">${esc(label)}</div>`;
+    }
+    h+='</div></div>';
+  }
+  tl.innerHTML=h;
+}
+
+async function refreshOverview(){ try{ renderTimeline(await pywebview.api.overview()) }catch(e){} }
+
+async function loadProjects(){
+  const list=await pywebview.api.projects();
+  $('plist').innerHTML = list.map(p => `<div class="pitem ${current===p.folder?'on':''}" data-f="${esc(p.folder)}"><span>${esc(p.name)}</span><small>${fmtTime(p.duration)}</small></div>`).join('') || '<p style="color:var(--muted);padding:8px">לא נמצאו פרויקטים</p>';
+  document.querySelectorAll('.pitem').forEach(el => el.onclick = () => openProject(el.dataset.f));
+}
+
+async function openProject(folder){
+  if(busy) return;
+  const ov = await pywebview.api.open_project(folder);
+  current = folder; $('ptitle').textContent = ov.project; renderTimeline(ov);
+  add('msg sys', `נפתח הפרויקט „${esc(ov.project)}” — ${ov.tracks.reduce((a,t)=>a+t.segments.length,0)} קטעים, ${fmtTime(ov.duration_s)}`);
+  loadProjects();
+}
+
+async function pollCapcut(){
+  try{
+    const s=await pywebview.api.capcut_status();
+    const el=$('ccstatus');
+    el.textContent = s.running ? 'CapCut פתוח' : 'CapCut סגור ✓';
+    el.className = 'pill ' + (s.running ? 'run' : 'ok');
+    $('btnClose').style.display = s.running ? '' : 'none';
+    return s.running;
+  }catch(e){ return false }
+}
+async function closeCapcut(){ add('msg sys','סוגר את CapCut…'); await pywebview.api.close_capcut(); await pollCapcut(); refreshOverview() }
+async function openCapcut(){ await pywebview.api.open_capcut(); add('msg sys','CapCut נפתח — פתח בו את הפרויקט כדי לראות את השינויים. סגור אותו לפני הבקשה הבאה.'); setTimeout(pollCapcut,3000) }
+async function doUndo(){ if(busy) return; const r=await pywebview.api.undo(); add(r.ok?'msg sys':'msg err', r.ok ? `↶ בוטל: „${esc(r.label)}”` : esc(r.error)); refreshOverview() }
+async function newChat(){ await pywebview.api.new_chat(); $('chat').innerHTML=''; add('msg sys','שיחה חדשה התחילה') }
+
+function setBusy(b){
+  busy=b; $('send').disabled=b; $('stop').style.display=b?'':'none';
+  if(b){ typingEl=document.createElement('div'); typingEl.className='typing'; typingEl.innerHTML='עובד<span>.</span><span>.</span><span>.</span>'; $('chat').appendChild(typingEl); scrollDown() }
+  else if(typingEl){ typingEl.remove(); typingEl=null }
+}
+
+async function send(){
+  const text=$('input').value.trim();
+  if(!text || busy) return;
+  if(await pollCapcut()){ pendingText=text; show('mRun'); return }
+  doSend(text);
+}
+async function runChoice(c){
+  hide('mRun'); const t=pendingText; pendingText=null;
+  if(c==='cancel') return;
+  if(c==='close') await closeCapcut();
+  doSend(t);
+}
+async function doSend(text){
+  $('input').value=''; autoGrow();
+  add('msg user', esc(text));
+  setBusy(true);
+  const r=await pywebview.api.send(text);
+  if(!r.ok){ setBusy(false); if(r.error==='nokey') showKey(); else add('msg err', esc(r.error)) }
+}
+function quick(t){ $('input').value=t; send() }
+
+window.onEvent = (kind, data) => {
+  if(kind==='assistant') add('msg bot', esc(data));
+  else if(kind==='tool'){
+    const d=add('tool', `🔧 ${esc(TOOL_HE[data.name]||data.name)}<pre>${esc(JSON.stringify(data.input,null,1))}</pre>`);
+    d.onclick=()=>d.classList.toggle('open');
+  }
+  else if(kind==='changed') refreshOverview();
+  else if(kind==='error') add('msg err', esc(data));
+  else if(kind==='project'){ current=data.folder; $('ptitle').textContent=data.name; refreshOverview(); loadProjects() }
+  else if(kind==='done'){ setBusy(false); refreshOverview() }
+};
+
+async function attachFolder(){ const f=await pywebview.api.pick_folder(); if(f) insert(`"${f}"`) }
+async function attachFiles(){ const fs=await pywebview.api.pick_files(); if(fs.length) insert(fs.map(f=>`"${f}"`).join(' ')) }
+function insert(s){ const i=$('input'); i.value = (i.value ? i.value.trimEnd()+' ' : '') + s + ' '; i.focus(); autoGrow() }
+
+function showKey(){ $('keyInput').value=''; show('mKey'); $('keyInput').focus() }
+async function saveKey(){ const k=$('keyInput').value.trim(); if(!k) return; const r=await pywebview.api.set_api_key(k); hide('mKey'); add('msg sys', r.has_key?'המפתח נשמר ✓':'שגיאה בשמירת המפתח') }
+function showNewProject(){ $('newName').value=''; show('mNew'); $('newName').focus() }
+async function createProject(){
+  const n=$('newName').value.trim(); if(!n) return;
+  if(await pollCapcut()){ add('msg err','סגור את CapCut לפני יצירת פרויקט חדש (אחרת הוא לא יופיע ברשימה שלו).'); hide('mNew'); return }
+  hide('mNew');
+  try{ const ov=await pywebview.api.new_project(n, $('newRatio').value); current=null; await loadProjects(); add('msg sys',`נוצר פרויקט חדש „${esc(ov.project)}”`); renderTimeline(ov); $('ptitle').textContent=ov.project }
+  catch(e){ add('msg err', esc(e.message||e)) }
+}
+
+function autoGrow(){ const i=$('input'); i.style.height='auto'; i.style.height=Math.min(i.scrollHeight,180)+'px' }
+$('input').addEventListener('input', autoGrow);
+window.addEventListener('resize', autoGrow);
+$('input').addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send() } });
+
+window.addEventListener('pywebviewready', async () => {
+  const st=await pywebview.api.init();
+  await loadProjects();
+  if(st.project){ current=st.project_folder; $('ptitle').textContent=st.project; refreshOverview(); loadProjects() }
+  if(!st.has_key) showKey();
+  pollCapcut(); setInterval(pollCapcut, 5000);
+});
+</script>
+</body>
+</html>

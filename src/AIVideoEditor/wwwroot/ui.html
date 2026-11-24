@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Video Editor</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a; --text:#e8eaf0; --muted:#8b93a7;
+  --accent:#22d3c5; --accent2:#0ea5a0; --user:#1f3a5f; --warn:#f59e0b; --err:#ef4444;
+  --k-video:#3b82f6; --k-photo:#8b5cf6; --k-audio:#10b981; --k-text:#f59e0b; --k-effect:#ec4899;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.5 "Segoe UI","Arial",sans-serif}
+button{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent2);border-color:var(--accent2);color:#fff;font-weight:600}
+button.primary:hover{background:var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+select{cursor:pointer}
+.app{display:grid;grid-template-columns:270px 1fr;height:100vh}
+aside{background:var(--panel);border-inline-end:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+aside h2{font-size:12px;color:var(--muted);margin:14px 14px 6px;font-weight:600;letter-spacing:.3px}
+.edsel{margin:0 12px;display:flex;flex-direction:column;gap:6px}
+.edsel select{width:100%}
+.hint{font-size:12px;color:var(--muted);margin:2px 2px 0}
+.plist{overflow:auto;flex:1;padding:4px 8px 8px}
+.pitem{padding:8px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+.pitem span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pitem:hover{background:var(--panel2)}
+.pitem.on{background:#13343a;outline:1px solid var(--accent2)}
+.pitem small{color:var(--muted);flex:none}
+.side-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px;border-top:1px solid var(--line)}
+.side-btns button.wide{grid-column:1 / -1}
+main{display:flex;flex-direction:column;min-width:0;min-height:0}
+header{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+header .title{font-weight:700;font-size:16px;flex:1;min-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{font-size:12px;padding:3px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.pill.run{color:var(--warn);border-color:var(--warn)}
+.pill.ok{color:var(--accent);border-color:var(--accent2)}
+.timeline{padding:8px 16px;border-bottom:1px solid var(--line);background:#12151b;max-height:170px;overflow:auto}
+.trow{display:flex;align-items:center;gap:8px;height:20px;margin:3px 0}
+.tlabel{width:70px;font-size:11px;color:var(--muted);direction:ltr;text-align:left;flex:none}
+.tbar{position:relative;flex:1;height:16px;background:#0b0d11;border-radius:4px;direction:ltr}
+.seg{position:absolute;top:1px;height:14px;border-radius:3px;opacity:.9;font-size:9px;color:#fff;overflow:hidden;white-space:nowrap;padding:0 3px;border-inline:1px solid #0008}
+.tinfo{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;margin-bottom:4px}
+.chat{flex:1;overflow:auto;padding:18px 18px 8px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:80%;padding:10px 14px;border-radius:14px;white-space:pre-wrap;word-wrap:break-word}
+.msg.user{align-self:flex-start;background:var(--user);border-end-start-radius:4px}
+.msg.bot{align-self:flex-end;background:var(--panel2);border:1px solid var(--line);border-end-end-radius:4px}
+.msg.err{align-self:center;background:#3a1416;border:1px solid var(--err);color:#fecaca}
+.msg.sys{align-self:center;color:var(--muted);font-size:12px;background:none;padding:2px;text-align:center}
+.tool{align-self:flex-end;font-size:12px;color:var(--muted);background:#141821;border:1px dashed var(--line);border-radius:8px;padding:3px 10px;max-width:80%;cursor:pointer}
+.tool pre{display:none;margin:4px 0 0;direction:ltr;text-align:left;white-space:pre-wrap;font-size:11px}
+.tool.open pre{display:block}
+.typing{align-self:flex-end;color:var(--muted);font-size:13px}
+.typing span{animation:blink 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+.composer{border-top:1px solid var(--line);padding:10px 16px 14px;background:var(--panel)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.chip{font-size:12px;padding:3px 10px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);cursor:pointer;color:var(--muted)}
+.chip:hover{color:var(--text);border-color:var(--accent2)}
+.row{display:flex;gap:8px;align-items:flex-end}
+textarea{flex:1;resize:none;min-height:44px;max-height:180px}
+.modal-bg{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:9;padding:16px}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;width:min(520px,100%);max-height:100%;overflow:auto}
+.modal h3{margin:0 0 8px}
+.modal p{color:var(--muted);margin:6px 0 12px}
+.modal label{display:block;margin:12px 0 4px;font-size:13px;color:var(--muted)}
+.modal .btns{display:flex;gap:8px;justify-content:flex-start;flex-wrap:wrap;margin-top:16px}
+.modal input,.modal select{width:100%}
+.seg-tabs{display:flex;gap:6px}
+.seg-tabs button{flex:1}
+.seg-tabs button.on{background:#13343a;border-color:var(--accent2);color:var(--accent)}
+.keyrow{display:flex;gap:6px}
+.keyrow input{flex:1}
+a{color:var(--accent);cursor:pointer}
+.empty{margin:auto;text-align:center;color:var(--muted);max-width:560px}
+.empty h1{color:var(--text);font-size:22px;margin-bottom:6px}
+@media (max-width:900px){.app{grid-template-columns:210px 1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h2>תוכנת העריכה</h2>
+    <div class="edsel">
+      <select id="editor"></select>
+      <div class="hint" id="edhint"></div>
+    </div>
+    <h2>הפרויקטים</h2>
+    <div class="plist" id="plist"></div>
+    <div class="side-btns">
+      <button onclick="showNewProject()">＋ חדש</button>
+      <button onclick="openFile()">📂 פתח קובץ</button>
+      <button onclick="loadProjects()">⟳ רענן</button>
+      <button onclick="showSettings()">⚙ הגדרות</button>
+    </div>
+  </aside>
+  <main>
+    <header>
+      <div class="title" id="ptitle">לא נבחר פרויקט</div>
+      <span class="pill" id="provpill" title="מודל ה-AI">AI: ?</span>
+      <span class="pill" id="edstatus" style="display:none"></span>
+      <button onclick="closeEditor()" id="btnClose" style="display:none">סגור</button>
+      <button onclick="openEditor()" id="btnOpen">▶ פתח בתוכנה</button>
+      <button onclick="reveal()" title="הצג את קובץ הפרויקט בתיקייה">📁</button>
+      <button onclick="doUndo()" title="בטל את הבקשה האחרונה">↶ בטל</button>
+      <button onclick="newChat()" title="שיחה חדשה (הפרויקט לא משתנה)">🗨</button>
+    </header>
+    <div class="timeline" id="timeline" style="display:none"></div>
+    <div class="chat" id="chat">
+      <div class="empty" id="empty">
+        <h1>עורך הווידאו החכם שלך 🎬</h1>
+        <p>בחר תוכנת עריכה ופרויקט (או צור חדש) וכתוב מה לעשות, למשל:<br>
+        „קח את כל התמונות מהתיקייה <i>C:\Users\...\Pictures\טיול</i>, 4 שניות לכל תמונה, עם זום עדין ומעברי דהייה”<br>
+        „תוסיף את השיר מההורדות לכל אורך הסרטון עם fade בסוף”<br>
+        „תזיז את הכותרת למעלה ותגדיל אותה”</p>
+      </div>
+    </div>
+    <div class="composer">
+      <div class="chips">
+        <span class="chip" onclick="attachFolder()">📁 צרף תיקייה</span>
+        <span class="chip" onclick="attachFiles()">📎 צרף קבצים</span>
+        <span class="chip" onclick="quick('מה יש כרגע בפרויקט? תן סיכום קצר')">מה יש בפרויקט?</span>
+        <span class="chip" onclick="quick('תוסיף מעבר דהייה עדין בין כל הקליפים בטראק הראשי')">מעברים לכולם</span>
+        <span class="chip" onclick="quick('תוסיף תנועת זום/פאן עדינה לכל התמונות (Ken Burns), מתחלפת')">זום לתמונות</span>
+        <span class="chip" onclick="quick('תשתיק את הסאונד המקורי של הסרטונים בטראק הראשי')">השתק סאונד מקורי</span>
+      </div>
+      <div class="row">
+        <textarea id="input" rows="2" placeholder="כתוב מה לערוך…  (Enter לשליחה, Shift+Enter לשורה חדשה)"></textarea>
+        <button class="primary" id="send" onclick="send()">שלח</button>
+        <button id="stop" onclick="api.stop()" style="display:none">עצור</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-bg" id="mSettings"><div class="modal">
+  <h3>הגדרות AI</h3>
+  <p>בחר איזה מודל יבצע את העריכות והזן מפתח API. המפתחות נשמרים מוצפנים רק במחשב הזה.</p>
+  <div class="seg-tabs">
+    <button id="tabClaude" onclick="pickProvider('claude')">Claude (Anthropic)</button>
+    <button id="tabGemini" onclick="pickProvider('gemini')">Gemini (Google)</button>
+  </div>
+  <div id="boxClaude">
+    <label>מפתח Claude API — מ-<a onclick="api.open_url('https://console.anthropic.com/settings/keys')">console.anthropic.com</a></label>
+    <input id="claudeKey" type="password" placeholder="sk-ant-...">
+    <label>מודל</label>
+    <select id="claudeModel">
+      <option value="claude-opus-5-5">Claude Opus 5.5 (מומלץ)</option>
+      <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (זול ומהיר יותר)</option>
+      <option value="claude-haiku-5-5">Claude Haiku 5.5 (הכי זול)</option>
+      <option value="claude-fable-5-2">Claude Fable 5.2 (הכי חזק, יקר)</option>
+    </select>
+  </div>
+  <div id="boxGemini" style="display:none">
+    <label>מפתח Gemini API — מ-<a onclick="api.open_url('https://aistudio.google.com/apikey')">aistudio.google.com</a></label>
+    <input id="geminiKey" type="password" placeholder="AIza...">
+    <label>מודל</label>
+    <div class="keyrow"><select id="geminiModel"><option value="">(אוטומטי — הכי חדש)</option></select><button onclick="loadGemini()">טען רשימה</button></div>
+  </div>
+  <div class="btns"><button class="primary" onclick="saveSettings()">שמור</button><button onclick="hide('mSettings')">ביטול</button></div>
+</div></div>
+
+<div class="modal-bg" id="mNew"><div class="modal">
+  <h3>פרויקט חדש</h3>
+  <input id="newName" placeholder="שם הפרויקט">
+  <label>יחס מסך</label>
+  <select id="newRatio"><option value="16:9">16:9 – רחב (YouTube)</option><option value="9:16">9:16 – לאורך (TikTok/Reels)</option><option value="1:1">1:1 – ריבוע</option><option value="4:5">4:5 – אינסטגרם</option></select>
+  <div class="btns"><button class="primary" onclick="createProject()">צור</button><button onclick="hide('mNew')">ביטול</button></div>
+</div></div>
+
+<div class="modal-bg" id="mRun"><div class="modal">
+  <h3 id="runTitle">התוכנה פתוחה</h3>
+  <p id="runText">כשהתוכנה פתוחה היא עלולה לדרוס את השינויים. לסגור אותה לפני העריכה?</p>
+  <div class="btns">
+    <button class="primary" onclick="runChoice('close')">סגור והמשך</button>
+    <button onclick="runChoice('go')">המשך בכל זאת</button>
+    <button onclick="runChoice('cancel')">ביטול</button>
+  </div>
+</div></div>
+
+<script>
+// ---- bridge to the .NET host (WebView2 postMessage)
+const pending = new Map(); let seq = 0;
+const api = new Proxy({}, { get: (_, method) => (...args) => new Promise((resolve, reject) => {
+  const id = ++seq; pending.set(id, { resolve, reject });
+  window.chrome.webview.postMessage({ id, method, args });
+}) });
+window.chrome.webview.addEventListener('message', e => {
+  const m = e.data;
+  if (m && m.event) { onEvent(m.event, m.data); return; }
+  const p = pending.get(m.id); if (!p) return; pending.delete(m.id);
+  m.error ? p.reject(new Error(m.error)) : p.resolve(m.result);
+});
+
+let state = null, current = null, busy = false, pendingText = null, typingEl = null, provider = 'claude';
+const $ = id => document.getElementById(id);
+const COLORS = {video:'var(--k-video)', photo:'var(--k-photo)', audio:'var(--k-audio)', text:'var(--k-text)', filter:'var(--k-effect)', video_effect:'var(--k-effect)', effect:'var(--k-effect)'};
+const TOOL_HE = {get_project_overview:'קורא את הפרויקט', list_folder_media:'סורק תיקייה', look_at_images:'מסתכל על תמונות', add_media:'מוסיף תמונות/סרטונים', add_audio:'מוסיף סאונד', add_text:'מוסיף טקסט', edit_segments:'עורך קטעים', move_segment:'מזיז קטע', delete_segments:'מוחק קטעים', split_segment:'חותך קטע', reorder_main_track:'מסדר מחדש', close_gaps:'סוגר רווחים', set_track_mute:'משתיק/מבטל השתקה', set_canvas:'משנה יחס מסך', search_catalog:'מחפש אפקט', set_transitions:'מוסיף מעברים', set_animations:'מוסיף אנימציה', add_motion:'מוסיף תנועה (זום/פאן)', add_filter_or_effect:'מוסיף פילטר/אפקט', set_audio_fade:'מגדיר fade', undo_last_request:'מבטל', list_projects:'רשימת פרויקטים', switch_project:'מחליף פרויקט', create_project:'יוצר פרויקט'};
+const DIRECT = ['capcut','shotcut','openshot'];
+
+function hide(id){ $(id).style.display='none' }
+function show(id){ $(id).style.display='flex' }
+function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])) }
+function scrollDown(){ const c=$('chat'); c.scrollTop=c.scrollHeight }
+function add(cls, html){ $('empty') && $('empty').remove(); const d=document.createElement('div'); d.className=cls; d.innerHTML=html; if(typingEl && typingEl.parentNode){ $('chat').insertBefore(d, typingEl) } else $('chat').appendChild(d); scrollDown(); return d }
+function fmtTime(s){ s=Math.round(s||0); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0') }
+function edInfo(){ return state?.editors.find(e => e.id === state.editor) }
+function errMsg(e){ return esc(e?.message || e) }
+
+function renderTimeline(ov){
+  const tl=$('timeline');
+  if(!ov){ tl.style.display='none'; return }
+  tl.style.display='block';
+  const total=Math.max(ov.duration_s, 1);
+  let h=`<div class="tinfo"><span>${esc(ov.editor)} · ${esc(ov.canvas)} · ${ov.fps}fps</span><span>אורך: ${fmtTime(ov.duration_s)}</span></div>`;
+  for(const t of ov.tracks){
+    h+=`<div class="trow"><div class="tlabel">${esc(t.track.replace(' (main)','★'))}${t.muted?' 🔇':''}</div><div class="tbar">`;
+    for(const s of t.segments){
+      const l=s.start/total*100, w=Math.max((s.end-s.start)/total*100, .3);
+      const label=s.text||s.file||s.name||'';
+      h+=`<div class="seg" title="${esc(s.id+' · '+label+' · '+s.start+'–'+s.end+'s')}" style="left:${l}%;width:${w}%;background:${COLORS[s.kind]||'#64748b'}">${esc(label)}</div>`;
+    }
+    h+='</div></div>';
+  }
+  tl.innerHTML=h;
+}
+async function refreshOverview(){ try{ renderTimeline(await api.overview()) }catch(e){} }
+
+function renderEditors(){
+  const sel=$('editor');
+  sel.innerHTML = state.editors.map(e => `<option value="${e.id}">${esc(e.display)}${e.installed?' ✓':''}${e.exportOnly?' (ייבוא)':''}</option>`).join('');
+  sel.value = state.editor;
+  const ed = edInfo();
+  $('edhint').textContent = ed.id==='capcut' ? 'עריכה ישירה של פרויקטי CapCut' :
+    DIRECT.includes(ed.id) ? 'עריכה ישירה של קובץ הפרויקט' :
+    `האפליקציה כותבת קובץ ייבוא. ב-${ed.display}: ${ed.hint}`;
+  $('btnOpen').textContent = `▶ פתח ב-${ed.display.replace(' (export all formats)','')}`;
+  $('btnOpen').style.display = ed.id==='finalcut' || ed.id==='other' ? 'none' : '';
+  const p = state.provider==='gemini' ? 'Gemini' : 'Claude';
+  $('provpill').textContent = `AI: ${p}`;
+  $('provpill').className = 'pill ' + (state.hasKey ? 'ok' : 'run');
+}
+$('editor').onchange = async () => {
+  try{
+    const list = await api.set_editor($('editor').value);
+    state.editor = $('editor').value; current = null; renderEditors();
+    $('ptitle').textContent = 'לא נבחר פרויקט'; renderTimeline(null);
+    renderProjectList(list); pollEditor();
+  }catch(e){ $('editor').value = state.editor; add('msg err', errMsg(e)) }
+};
+
+function renderProjectList(list){
+  $('plist').innerHTML = list.map(p => `<div class="pitem ${current===p.path?'on':''}" data-f="${esc(p.path)}"><span title="${esc(p.path)}">${esc(p.name)}</span><small>${p.duration?fmtTime(p.duration):esc((p.modified||'').split(' ')[0])}</small></div>`).join('')
+    || '<p class="hint" style="padding:8px">אין עדיין פרויקטים — צור חדש או פתח קובץ</p>';
+  document.querySelectorAll('.pitem').forEach(el => el.onclick = () => openProject(el.dataset.f));
+}
+async function loadProjects(){ try{ renderProjectList(await api.projects()) }catch(e){ add('msg err', errMsg(e)) } }
+
+async function openProject(path){
+  if(busy) return;
+  try{
+    const ov = await api.open_project(path);
+    current = path; $('ptitle').textContent = ov.project; renderTimeline(ov);
+    add('msg sys', `נפתח „${esc(ov.project)}” — ${ov.tracks.reduce((a,t)=>a+t.segments.length,0)} קטעים, ${fmtTime(ov.duration_s)}`);
+    loadProjects();
+  }catch(e){ add('msg err', errMsg(e)) }
+}
+async function openFile(){
+  try{ const ov = await api.open_file(); if(ov){ $('ptitle').textContent = ov.project; renderTimeline(ov); loadProjects() } }
+  catch(e){ add('msg err', errMsg(e)) }
+}
+
+async function pollEditor(){
+  try{
+    const s=await api.editor_status(), ed=edInfo(), el=$('edstatus');
+    const direct = DIRECT.includes(ed.id);
+    el.style.display = direct && s.installed ? '' : 'none';
+    el.textContent = s.running ? `${ed.display} פתוח` : `${ed.display} סגור ✓`;
+    el.className = 'pill ' + (s.running ? 'run' : 'ok');
+    $('btnClose').style.display = direct && s.running ? '' : 'none';
+    return direct && s.running;
+  }catch(e){ return false }
+}
+async function closeEditor(){ add('msg sys',`סוגר את ${esc(edInfo().display)}…`); await api.close_editor(); await pollEditor(); refreshOverview() }
+async function openEditor(){
+  try{
+    await api.open_editor(); const ed=edInfo();
+    add('msg sys', DIRECT.includes(ed.id)
+      ? `${esc(ed.display)} נפתח — פתח בו את הפרויקט כדי לראות את השינויים. סגור אותו לפני הבקשה הבאה.`
+      : `${esc(ed.display)} נפתח. ${esc(ed.hint)} (הכפתור 📁 מראה איפה הקבצים)`);
+    setTimeout(pollEditor,3000);
+  }catch(e){ add('msg err', errMsg(e)) }
+}
+async function reveal(){ await api.reveal() }
+async function doUndo(){ if(busy) return; try{ const r=await api.undo(); add('msg sys', `↶ בוטל: „${esc(r.label)}”`); refreshOverview() }catch(e){ add('msg err', errMsg(e)) } }
+async function newChat(){ await api.new_chat(); $('chat').innerHTML=''; add('msg sys','שיחה חדשה התחילה') }
+
+function setBusy(b){
+  busy=b; $('send').disabled=b; $('stop').style.display=b?'':'none';
+  if(b){ typingEl=document.createElement('div'); typingEl.className='typing'; typingEl.innerHTML='עובד<span>.</span><span>.</span><span>.</span>'; $('chat').appendChild(typingEl); scrollDown() }
+  else if(typingEl){ typingEl.remove(); typingEl=null }
+}
+async function send(){
+  const text=$('input').value.trim();
+  if(!text || busy) return;
+  if(await pollEditor()){ pendingText=text; $('runTitle').textContent=`${edInfo().display} פתוח`; show('mRun'); return }
+  doSend(text);
+}
+async function runChoice(c){
+  hide('mRun'); const t=pendingText; pendingText=null;
+  if(c==='cancel') return;
+  if(c==='close') await closeEditor();
+  doSend(t);
+}
+async function doSend(text){
+  $('input').value=''; autoGrow();
+  add('msg user', esc(text));
+  setBusy(true);
+  const r=await api.send(text);
+  if(!r.ok){ setBusy(false); if(r.error==='nokey') showSettings(); else add('msg err', esc(r.error)) }
+}
+function quick(t){ $('input').value=t; send() }
+
+function onEvent(kind, data){
+  if(kind==='assistant') add('msg bot', esc(data));
+  else if(kind==='tool'){ const d=add('tool', `🔧 ${esc(TOOL_HE[data.name]||data.name)}<pre>${esc(JSON.stringify(data.input,null,1))}</pre>`); d.onclick=()=>d.classList.toggle('open') }
+  else if(kind==='changed'){ refreshOverview(); if(data) add('msg sys', esc(data)) }
+  else if(kind==='error') add('msg err', esc(data));
+  else if(kind==='project'){ current=data.path; $('ptitle').textContent=data.name; refreshOverview(); loadProjects() }
+  else if(kind==='done'){ setBusy(false); refreshOverview() }
+}
+
+async function attachFolder(){ const f=await api.pick_folder(); if(f) insert(`"${f}"`) }
+async function attachFiles(){ const fs=await api.pick_files(); if(fs?.length) insert(fs.map(f=>`"${f}"`).join(' ')) }
+function insert(s){ const i=$('input'); i.value = (i.value ? i.value.trimEnd()+' ' : '') + s + ' '; i.focus(); autoGrow() }
+
+function pickProvider(p){
+  provider=p;
+  $('tabClaude').classList.toggle('on', p==='claude'); $('tabGemini').classList.toggle('on', p==='gemini');
+  $('boxClaude').style.display = p==='claude' ? '' : 'none'; $('boxGemini').style.display = p==='gemini' ? '' : 'none';
+}
+function showSettings(){
+  $('claudeKey').value=''; $('geminiKey').value='';
+  $('claudeKey').placeholder = state?.hasClaude ? 'נשמר ✓ (השאר ריק כדי לא לשנות)' : 'sk-ant-...';
+  $('geminiKey').placeholder = state?.hasGemini ? 'נשמר ✓ (השאר ריק כדי לא לשנות)' : 'AIza...';
+  $('claudeModel').value = state?.claudeModel || 'claude-opus-5-5';
+  if(state?.geminiModel && ![...$('geminiModel').options].some(o=>o.value===state.geminiModel))
+    $('geminiModel').add(new Option(state.geminiModel, state.geminiModel));
+  $('geminiModel').value = state?.geminiModel || '';
+  pickProvider(state?.provider || 'claude'); show('mSettings');
+}
+async function loadGemini(){
+  try{
+    const list = await api.gemini_models($('geminiKey').value.trim());
+    const sel=$('geminiModel'); const keep=sel.value;
+    sel.innerHTML='<option value="">(אוטומטי — הכי חדש)</option>' + list.map(m=>`<option>${esc(m)}</option>`).join('');
+    sel.value = list.includes(keep) ? keep : '';
+  }catch(e){ alert(e.message) }
+}
+async function saveSettings(){
+  try{
+    state = await api.save_settings({ provider, claudeKey:$('claudeKey').value.trim(), geminiKey:$('geminiKey').value.trim(),
+      claudeModel:$('claudeModel').value, geminiModel:$('geminiModel').value });
+    hide('mSettings'); renderEditors();
+    add('msg sys', state.hasKey ? `נשמר ✓ — עובד עם ${provider==='gemini'?'Gemini':'Claude'}` : 'חסר מפתח API לספק שנבחר');
+  }catch(e){ alert(e.message) }
+}
+function showNewProject(){ $('newName').value=''; show('mNew'); $('newName').focus() }
+async function createProject(){
+  const n=$('newName').value.trim(); if(!n) return;
+  if(await pollEditor()){ add('msg err',`סגור את ${esc(edInfo().display)} לפני יצירת פרויקט חדש.`); hide('mNew'); return }
+  hide('mNew');
+  try{ const ov=await api.new_project(n, $('newRatio').value); await loadProjects(); add('msg sys',`נוצר פרויקט חדש „${esc(ov.project)}”`); renderTimeline(ov); $('ptitle').textContent=ov.project }
+  catch(e){ add('msg err', errMsg(e)) }
+}
+
+function autoGrow(){ const i=$('input'); i.style.height='auto'; i.style.height=Math.min(i.scrollHeight,180)+'px' }
+$('input').addEventListener('input', autoGrow);
+window.addEventListener('resize', autoGrow);
+$('input').addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send() } });
+['mSettings','mNew','mRun'].forEach(id => $(id).addEventListener('click', e => { if(e.target.id===id) hide(id) }));
+
+(async () => {
+  try{
+    state = await api.init();
+    renderEditors(); await loadProjects();
+    if(state.project){ current=state.projectPath; $('ptitle').textContent=state.project; refreshOverview(); loadProjects() }
+    if(!state.hasKey) showSettings();
+    pollEditor(); setInterval(pollEditor, 5000);
+  }catch(e){ add('msg err', errMsg(e)) }
+})();
+</script>
+</body>
+</html>
