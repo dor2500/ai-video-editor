@@ -12,6 +12,8 @@ Chat with an AI that edits your video project for you: *"take all the photos fro
 
 תוכנה לווינדוס בסביבת עריכה מלאה במצב כהה (Dark Mode) עם ציר זמן אינטראקטיבי רב-ערוצי, תצוגה מקדימה חיה, ספריית מדיה, עורך מאפיינים ו-**EditPilot** — עוזר ה-AI שעורך עבורכם את הפרויקט ישירות בתוכנת העריכה.
 
+> **דרישה מוקדמת — תוכנת עריכת וידאו קיימת:** התוכנה **אינה** מרנדרת או מייצאת קובץ MP4 סופי בעצמה. היא עורכת ישירות את קובץ הפרויקט (ב-CapCut / Shotcut / OpenShot) או כותבת קובץ ייבוא (ל-Premiere Pro / DaVinci Resolve / Final Cut Pro / Kdenlive / VEGAS / Filmora), ולאחר מכן פותחים או מרנדרים את הסרטון הסופי בתוכנת העריכה המותקנת במחשב.
+
 ### מה חדש ב-v2.7.0 (כולל כל יכולות v2.2.0–v2.6.0)
 - **כפתור עדכון קבוע מחובר ל-GitHub Releases:** כפתור גרסה ועדכונים קבוע בסרגל העליון + **Check for Updates...** בתפריט. בודק מול GitHub Releases, מציג הערות גרסה, מוריד את קובץ ההתקנה הרשמי עם מד התקדמות ומפעיל אותו ישירות לעדכון בלחיצה אחת.
 - **הורדה ישירה מיוטיוב (בצ'אט EditPilot ובספריית המדיה):** אפשר להדביק לינק יוטיוב (או שם שיר) בבקשה ל-EditPilot — העוזר מוריד אוטומטית את האודיו (`MP3`) או הווידאו (`MP4`) לתיקיית `Documents\AI Video Editor\Downloads`, מכניס לציר הזמן ומבצע את העריכות שביקשתם (התאמה לאורך הסרטון, חיתוך, דהייה וכו'). נוסף גם כפתור **YouTube** ישיר בספריית המדיה.
@@ -72,6 +74,8 @@ Chat with an AI that edits your video project for you: *"take all the photos fro
 ## English
 
 A Windows desktop video editing studio in permanent Dark Mode featuring a media bin, live preview stage, property inspector, interactive multi-track timeline, and **EditPilot** — an AI assistant that edits your project directly in your video editor.
+
+> **Requirement — Existing Video Editor:** This app does **not** render or export the final MP4 video file on its own. You need an existing video editor installed (direct project editing for CapCut, Shotcut, and OpenShot; or import files generated for Premiere Pro, DaVinci Resolve, Final Cut Pro, Kdenlive, VEGAS Pro, or Filmora) to open and render your finished video.
 
 ### Highlights (v2.7.0 + v2.2.0–v2.6.0)
 - **Always-Visible GitHub Releases Updater:** Permanent version/update button in the top bar plus **Check for Updates...** in Menu. Inspects GitHub Releases, displays release notes, downloads the official Setup installer with progress tracking, and launches the update in one click.
