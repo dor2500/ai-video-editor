@@ -79,6 +79,8 @@ textarea{flex:1;resize:none;min-height:44px;max-height:180px}
 a{color:var(--accent);cursor:pointer}
 .empty{margin:auto;text-align:center;color:var(--muted);max-width:560px}
 .empty h1{color:var(--text);font-size:22px;margin-bottom:6px}
+body.dragging .composer{outline:2px dashed var(--accent);outline-offset:-6px}
+body.dragging .composer::before{content:'שחרר כאן כדי לצרף את הקבצים';display:block;color:var(--accent);margin-bottom:6px}
 @media (max-width:900px){.app{grid-template-columns:210px 1fr}}
 </style>
 </head>
@@ -102,6 +104,7 @@ a{color:var(--accent);cursor:pointer}
   <main>
     <header>
       <div class="title" id="ptitle">לא נבחר פרויקט</div>
+      <button class="primary" id="updBtn" style="display:none" onclick="api.open_url(updUrl)"></button>
       <span class="pill" id="provpill" title="מודל ה-AI">AI: ?</span>
       <span class="pill" id="edstatus" style="display:none"></span>
       <button onclick="closeEditor()" id="btnClose" style="display:none">סגור</button>
@@ -130,7 +133,7 @@ a{color:var(--accent);cursor:pointer}
         <span class="chip" onclick="quick('תשתיק את הסאונד המקורי של הסרטונים בטראק הראשי')">השתק סאונד מקורי</span>
       </div>
       <div class="row">
-        <textarea id="input" rows="2" placeholder="כתוב מה לערוך…  (Enter לשליחה, Shift+Enter לשורה חדשה)"></textarea>
+        <textarea id="input" rows="2" placeholder="כתוב מה לערוך… אפשר גם לגרור לכאן תמונות, סרטונים, שירים או תיקייה  (Enter לשליחה)"></textarea>
         <button class="primary" id="send" onclick="send()">שלח</button>
         <button id="stop" onclick="api.stop()" style="display:none">עצור</button>
       </div>
@@ -183,7 +186,7 @@ window.chrome.webview.addEventListener('message', e => {
   m.error ? p.reject(new Error(m.error)) : p.resolve(m.result);
 });
 
-let state = null, current = null, busy = false, pendingText = null, typingEl = null, provider = 'claude';
+let updUrl = '', state = null, current = null, busy = false, pendingText = null, typingEl = null, provider = 'claude';
 const $ = id => document.getElementById(id);
 const COLORS = {video:'var(--k-video)', photo:'var(--k-photo)', audio:'var(--k-audio)', text:'var(--k-text)', filter:'var(--k-effect)', video_effect:'var(--k-effect)', effect:'var(--k-effect)'};
 const TOOL_HE = {get_project_overview:'קורא את הפרויקט', list_folder_media:'סורק תיקייה', look_at_images:'מסתכל על תמונות', add_media:'מוסיף תמונות/סרטונים', add_audio:'מוסיף סאונד', add_text:'מוסיף טקסט', edit_segments:'עורך קטעים', move_segment:'מזיז קטע', delete_segments:'מוחק קטעים', split_segment:'חותך קטע', reorder_main_track:'מסדר מחדש', close_gaps:'סוגר רווחים', set_track_mute:'משתיק/מבטל השתקה', set_canvas:'משנה יחס מסך', search_catalog:'מחפש אפקט', set_transitions:'מוסיף מעברים', set_animations:'מוסיף אנימציה', add_motion:'מוסיף תנועה (זום/פאן)', add_filter_or_effect:'מוסיף פילטר/אפקט', set_audio_fade:'מגדיר fade', undo_last_request:'מבטל', list_projects:'רשימת פרויקטים', switch_project:'מחליף פרויקט', create_project:'יוצר פרויקט'};
@@ -318,6 +321,9 @@ function onEvent(kind, data){
   else if(kind==='changed'){ refreshOverview(); if(data) add('msg sys', esc(data)) }
   else if(kind==='error') add('msg err', esc(data));
   else if(kind==='info') add('msg sys', esc(data));
+  else if(kind==='provider'){ if(state){ state.provider=data.id; const p=provInfo(data.id); if(p) p.hasKey=true; renderEditors() } }
+  else if(kind==='dropped'){ if(data?.length) insert(data.map(f=>`"${f}"`).join(' ')) }
+  else if(kind==='update'){ updUrl=data.url; const b=$('updBtn'); b.textContent=`⬆ גרסה ${data.version} זמינה`; b.style.display='' }
   else if(kind==='project'){ current=data.path; $('ptitle').textContent=data.name; refreshOverview(); loadProjects() }
   else if(kind==='done'){ setBusy(false); refreshOverview() }
 }
@@ -368,6 +374,16 @@ function autoGrow(){ const i=$('input'); i.style.height='auto'; i.style.height=M
 $('input').addEventListener('input', autoGrow);
 window.addEventListener('resize', autoGrow);
 $('input').addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send() } });
+// drag & drop photos, videos, songs or folders anywhere on the window
+document.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('dragging') });
+document.addEventListener('dragleave', e => { if(!e.relatedTarget) document.body.classList.remove('dragging') });
+document.addEventListener('drop', e => {
+  e.preventDefault(); document.body.classList.remove('dragging');
+  const files = e.dataTransfer?.files;
+  if(!files || !files.length) return;
+  try{ window.chrome.webview.postMessageWithAdditionalObjects({ method: 'dropped' }, files) }
+  catch(err){ add('msg err', 'אפשר לגרור רק קבצים ותיקיות מהמחשב (לא מדפדפן). שמור את הקובץ קודם ואז גרור אותו.') }
+});
 ['mSettings','mNew','mRun'].forEach(id => $(id).addEventListener('click', e => { if(e.target.id===id) hide(id) }));
 
 (async () => {

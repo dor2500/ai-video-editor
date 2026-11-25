@@ -24,11 +24,32 @@ public sealed class Args(JsonObject o)
         return null;
     }
     public double D(string k, double def) => D(k) ?? def;
-    public bool? B(string k) => o[k] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
+    /// <summary>Booleans; weaker models often send "true"/"false"/"yes"/1 instead of JSON booleans.</summary>
+    public bool? B(string k)
+    {
+        if (o[k] is not JsonValue v) return null;
+        if (v.TryGetValue<bool>(out var b)) return b;
+        if (v.TryGetValue<string>(out var s))
+            return s.Trim().ToLowerInvariant() switch { "true" or "yes" or "1" or "on" => true, "false" or "no" or "0" or "off" => false, _ => null };
+        if (v.TryGetValue<int>(out var i)) return i != 0;
+        if (v.TryGetValue<double>(out var d)) return d != 0;
+        return null;
+    }
     public bool B(string k, bool def) => B(k) ?? def;
-    public List<string> L(string k) => o[k] is JsonArray a
-        ? a.Select(x => x is JsonValue v && v.TryGetValue<string>(out var s) ? s : x?.ToString() ?? "").Where(s => s != "").ToList()
-        : o[k] is JsonValue sv && sv.TryGetValue<string>(out var one) ? [one] : [];
+    /// <summary>Lists; also accepts a single string or a JSON array encoded as a string (common with weaker models).</summary>
+    public List<string> L(string k)
+    {
+        if (o[k] is JsonArray a)
+            return a.Select(x => x is JsonValue v && v.TryGetValue<string>(out var s) ? s : x?.ToString() ?? "").Where(s => s != "").ToList();
+        if (o[k] is JsonValue sv && sv.TryGetValue<string>(out var one))
+        {
+            var t = one.Trim();
+            if (t.StartsWith('['))
+                try { if (JsonNode.Parse(t) is JsonArray arr) return new Args(new JsonObject { [k] = arr.DeepClone() }).L(k); } catch { }
+            return t == "" ? [] : [one];
+        }
+        return [];
+    }
     public string Req(string k) => S(k) ?? throw new EditException($"Missing '{k}'");
     public double ReqD(string k) => D(k) ?? throw new EditException($"Missing number '{k}'");
 }

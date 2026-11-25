@@ -12,6 +12,7 @@ namespace AIVideoEditor.AI;
 /// </summary>
 public sealed class GeminiProvider(string apiKey, string model) : IAiProvider
 {
+    string model = model;
     const string Base = "https://generativelanguage.googleapis.com/v1beta/";
     static readonly HttpClient http = new() { Timeout = TimeSpan.FromMinutes(10) };
     readonly JsonArray contents = [];
@@ -48,6 +49,8 @@ public sealed class GeminiProvider(string apiKey, string model) : IAiProvider
 
     public async Task<AiTurn> NextAsync(string system, List<ToolDef> tools, CancellationToken ct)
     {
+        if (string.IsNullOrEmpty(model))
+            model = (await ListModels(apiKey)).FirstOrDefault() ?? throw new AiException("Gemini: no usable model found for this key", 404);
         var decls = new JsonArray();
         foreach (var t in tools)
             decls.Add(new JsonObject

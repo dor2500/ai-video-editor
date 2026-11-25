@@ -263,6 +263,76 @@ if (capcut != null)
     }
 }
 
+// ---- loose arguments, quota fallback, automatic model choice
+{
+    Console.WriteLine("[Robustness]");
+    var la = new Args(JsonNode.Parse("""{"b1":"true","b2":"no","b3":1,"l1":"[\"a\",\"b\"]","l2":"single","l3":["x","y"]}""")!.AsObject());
+    Check(la.B("b1") == true && la.B("b2") == false && la.B("b3") == true, "booleans given as text/numbers are accepted");
+    Check(la.L("l1").SequenceEqual(["a", "b"]) && la.L("l2").SequenceEqual(["single"]) && la.L("l3").SequenceEqual(["x", "y"]),
+        "lists given as a JSON string or a single value are accepted");
+
+    var settingsFile3 = Path.Combine(Paths.AppData, "settings.json");
+    var settingsBackup3 = File.Exists(settingsFile3) ? File.ReadAllText(settingsFile3) : null;
+    try
+    {
+        var f = Path.Combine(work, "fb.mlt");
+        new TimelineProject(Editors.Get("shotcut"), f);
+        var broke = new FakeProvider { FailNext = "x", FailWith = new AIVideoEditor.AI.AiException("Groq error 429: rate limit reached", 429) };
+        var good = new FakeProvider();
+        var events = new List<(string, object?)>();
+        var agent = new AIVideoEditor.AI.Agent(broke, (e, d) => events.Add((e, d))) { ProviderId = "groq" };
+        var asked = new List<string>();
+        agent.NextProvider = tried => { asked.AddRange(tried); return tried.Contains("gemini") ? null : ("gemini", good); };
+        agent.Open("shotcut", f);
+        good.Script.Enqueue([]);
+        await agent.SendAsync("hello");
+        Check(agent.ProviderId == "gemini" && good.Systems.Count == 1, "out-of-quota service replaced by the next one");
+        Check(events.Any(e => e.Item1 == "provider") && !events.Any(e => e.Item1 == "error"), "the switch is reported, no error shown");
+        Check(asked.Contains("groq"), "the failing service is not offered again");
+        // when every service is exhausted the error surfaces instead of looping
+        var dead = new FakeProvider { FailNext = "x", FailWith = new AIVideoEditor.AI.AiException("quota exceeded", 429) };
+        var agent2 = new AIVideoEditor.AI.Agent(dead, (_, _) => { }) { ProviderId = "gemini", NextProvider = _ => null };
+        agent2.Open("shotcut", f);
+        bool threw = false;
+        try { await agent2.SendAsync("hello"); } catch (AIVideoEditor.AI.AiException) { threw = true; }
+        Check(threw, "with no other service the quota error is shown");
+    }
+    finally
+    {
+        if (settingsBackup3 != null) File.WriteAllText(settingsFile3, settingsBackup3); else File.Delete(settingsFile3);
+    }
+
+    // empty model: the provider asks the service for its models and uses the best one
+    var port = 19000 + Random.Shared.Next(1000);
+    using var listener = new System.Net.HttpListener();
+    listener.Prefixes.Add($"http://127.0.0.1:{port}/v1/");
+    listener.Start();
+    string? usedModel = null;
+    var server = Task.Run(async () =>
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            var ctx = await listener.GetContextAsync();
+            string reply = """{"data":[{"id":"tiny-1b"},{"id":"big-70b"}]}""";
+            if (ctx.Request.HttpMethod == "POST")
+            {
+                using var sr = new StreamReader(ctx.Request.InputStream);
+                usedModel = JsonNode.Parse(await sr.ReadToEndAsync())!["model"]!.ToString();
+                reply = """{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"ok"}}]}""";
+            }
+            var bytes = System.Text.Encoding.UTF8.GetBytes(reply);
+            await ctx.Response.OutputStream.WriteAsync(bytes);
+            ctx.Response.Close();
+        }
+    });
+    var auto = new AIVideoEditor.AI.OpenAiCompatProvider(AIVideoEditor.AI.Services.Get("groq")!, "k", "", $"http://127.0.0.1:{port}/v1");
+    auto.AddUser("hi");
+    await auto.NextAsync("sys", [], CancellationToken.None);
+    await server;
+    listener.Stop();
+    Check(usedModel == "big-70b", $"automatic model choice used '{usedModel}'");
+}
+
 // ---- optional: leave a finished demo project (used for the README screenshot)
 var demoIdx = Array.IndexOf(args, "--demo");
 if (demoIdx >= 0 && demoIdx + 1 < args.Length)
@@ -325,13 +395,14 @@ sealed class FakeProvider : AIVideoEditor.AI.IAiProvider
     public List<string> Systems { get; } = [];
     public List<string> ToolSets { get; } = [];
     public string? FailNext { get; set; }
+    public Exception? FailWith { get; set; }
     public string Display => "fake";
     public void Reset() { }
     public void AddUser(string text) { }
     public void AddToolResults(List<AIVideoEditor.AI.ToolOutput> results) { }
     public Task<AIVideoEditor.AI.AiTurn> NextAsync(string system, List<AIVideoEditor.AI.ToolDef> tools, CancellationToken ct)
     {
-        if (FailNext is { } msg) { FailNext = null; throw new InvalidOperationException(msg); }
+        if (FailNext is { } msg) { FailNext = null; throw FailWith ?? new InvalidOperationException(msg); }
         Systems.Add(system);
         ToolSets.Add(string.Join(",", tools.Select(t => t.Name + ":" + t.Properties.ToJsonString())));
         var calls = Script.Count > 0 ? Script.Dequeue() : [];

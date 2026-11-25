@@ -40,6 +40,13 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
         set { provider = value; lastContextKey = ""; }
     }
 
+    /// <summary>
+    /// Called when the current service is out of quota/credit: returns another configured service
+    /// (not yet tried for this request) or null. Set by the host.
+    /// </summary>
+    public Func<HashSet<string>, (string Id, IAiProvider Provider)?>? NextProvider { get; set; }
+    public string ProviderId { get; set; } = Settings.Current.Provider;
+
     /// <summary>Forget the conversation (the project stays open).</summary>
     public void NewChat()
     {
@@ -138,12 +145,27 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
         var userText = Context() + text;
         Provider.AddUser(userText);
         bool retried = false;
+        var tried = new HashSet<string>();
         for (int step = 0; step < 40; step++)
         {
             if (cts.IsCancellationRequested) { emit("assistant", "⏹ נעצר."); return; }
             AiTurn turn;
             try { turn = await Provider.NextAsync(SystemBase, AllTools, cts.Token); }
             catch (OperationCanceledException) { emit("assistant", "⏹ נעצר."); return; }
+            catch (Exception e) when (IsQuotaOrCredit(e) && NextProvider != null)
+            {
+                tried.Add(ProviderId);
+                var next = NextProvider(tried);
+                if (next == null) throw;
+                var from = Provider.Display;
+                (ProviderId, Provider) = (next.Value.Id, next.Value.Provider);
+                tried.Add(ProviderId);
+                Provider.AddUser(Context() + text);
+                emit("provider", new { id = ProviderId, display = Provider.Display });
+                emit("info", $"{from}: נגמרה המכסה/הקרדיט — עברתי אוטומטית ל-{Provider.Display} וממשיך בבקשה.");
+                step--;
+                continue;
+            }
             catch (Exception e) when (!retried && IsHistoryMismatch(e))
             {
                 // The stored conversation no longer matches what the API expects (e.g. an older app version changed
@@ -185,6 +207,20 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
             Provider.AddToolResults(results);
         }
         emit("error", "Too many steps — stopped.");
+    }
+
+    /// <summary>Out of credit, out of free quota or rate-limited: worth trying another service.</summary>
+    public static bool IsQuotaOrCredit(Exception e)
+    {
+        if (e is AiException { Status: 429 or 402 }) return true;
+        var n = e.GetType().Name;
+        var m = e.Message;
+        return n.Contains("RateLimit")
+               || m.Contains("credit balance", StringComparison.OrdinalIgnoreCase)
+               || m.Contains("RESOURCE_EXHAUSTED", StringComparison.OrdinalIgnoreCase)
+               || m.Contains("quota", StringComparison.OrdinalIgnoreCase)
+               || m.Contains("rate limit", StringComparison.OrdinalIgnoreCase)
+               || m.Contains("insufficient", StringComparison.OrdinalIgnoreCase) && m.Contains("credit", StringComparison.OrdinalIgnoreCase);
     }
 
     static bool IsHistoryMismatch(Exception e)

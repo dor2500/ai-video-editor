@@ -43,6 +43,14 @@ public partial class MainWindow : Window
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.AreDefaultContextMenusEnabled = core.Settings.AreDevToolsEnabled;
         core.WebMessageReceived += OnMessage;
+        // the UI is a single in-memory page: never navigate away (e.g. a file dropped outside the drop zone)
+        core.NavigationStarting += (_, ev) =>
+        {
+            if (ev.Uri.StartsWith("data:") || ev.Uri == "about:blank") return;
+            ev.Cancel = true;
+            if (ev.Uri.StartsWith("https://")) Process.Start(new ProcessStartInfo(ev.Uri) { UseShellExecute = true });
+        };
+        core.NavigationCompleted += async (_, _) => await CheckForUpdate();
         core.NewWindowRequested += (_, e) =>
         {
             e.Handled = true;
@@ -62,6 +70,13 @@ public partial class MainWindow : Window
 
     async void OnMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
+        // files dropped on the window arrive as additional objects with their full paths
+        if (e.AdditionalObjects is { Count: > 0 } extra)
+        {
+            var paths = extra.OfType<CoreWebView2File>().Select(f => f.Path).Where(p => !string.IsNullOrEmpty(p)).ToList();
+            Emit("dropped", paths);
+            return;
+        }
         JsonNode? msg;
         try { msg = JsonNode.Parse(e.WebMessageAsJson); } catch { return; }
         var id = msg?["id"]?.GetValue<int>() ?? 0;
@@ -75,6 +90,25 @@ public partial class MainWindow : Window
         Web.CoreWebView2?.PostWebMessageAsJson(json);
     }
 
+    bool updateChecked;
+
+    /// <summary>Tells the UI when a newer release exists on GitHub (no personal data is sent).</summary>
+    async Task CheckForUpdate()
+    {
+        if (updateChecked) return;
+        updateChecked = true;
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd($"AIVideoEditor/{Version}");
+            var j = JsonNode.Parse(await http.GetStringAsync("https://api.github.com/repos/dor2500/ai-video-editor/releases/latest"));
+            var tag = j?["tag_name"]?.ToString()?.TrimStart('v') ?? "";
+            if (System.Version.TryParse(tag, out var latest) && System.Version.TryParse(Version, out var mine) && latest > mine)
+                Emit("update", new { version = tag, url = j?["html_url"]?.ToString() });
+        }
+        catch { /* offline or rate-limited: no notice */ }
+    }
+
     static string A(JsonArray a, int i, string def = "") => i < a.Count ? a[i]?.ToString() ?? def : def;
 
     string providerSig = "";
@@ -86,22 +120,30 @@ public partial class MainWindow : Window
         var key = st.KeyFor(st.Provider);
         var sig = $"{st.Provider}|{model}|{key.GetHashCode()}";
         if (agent != null && sig == providerSig) return agent;
-        IAiProvider prov = st.Provider switch
-        {
-            "gemini" => new GeminiProvider(key, model is { Length: > 0 } ? model : "gemini-2.5-flash"),
-            "claude" => new ClaudeProvider(key, model is { Length: > 0 } ? model : "claude-opus-5-5"),
-            _ => Services.Get(st.Provider) is { } svc
-                ? new OpenAiCompatProvider(svc, key, model is { Length: > 0 } ? model : svc.PreferredModels[0])
-                : throw new EditException("Unknown AI provider " + st.Provider),
-        };
+        IAiProvider prov = MakeProvider(st.Provider);
         providerSig = sig;
         if (agent == null)
         {
             agent = new Agent(prov, Emit);
+            agent.NextProvider = tried =>
+            {
+                // free services first, the paid one last; only services with a saved key
+                foreach (var id in new[] { "gemini", "groq", "cerebras", "openrouter", "mistral", "claude" })
+                {
+                    if (tried.Contains(id) || !Settings.Current.HasKeyFor(id)) continue;
+                    var p = MakeProvider(id);
+                    Settings.Current.Provider = id;
+                    Settings.Current.Save();
+                    providerSig = $"{id}|{Settings.Current.ModelFor(id)}|{Settings.Current.KeyFor(id).GetHashCode()}";
+                    return (id, p);
+                }
+                return null;
+            };
             if (st.LastProject != "" && (File.Exists(st.LastProject) || Directory.Exists(st.LastProject)))
                 try { agent.Open(st.Editor, st.LastProject); } catch { }
         }
         else agent.Provider = prov;
+        agent.ProviderId = st.Provider;
         return agent;
     }
 
@@ -269,6 +311,21 @@ public partial class MainWindow : Window
             }
         }
         throw new InvalidOperationException("Unknown method " + method);
+    }
+
+    /// <summary>Builds the client for a service. An empty model means "pick the best available one at first use".</summary>
+    static IAiProvider MakeProvider(string id)
+    {
+        var st = Settings.Current;
+        var model = st.ModelFor(id);
+        var key = st.KeyFor(id);
+        return id switch
+        {
+            "gemini" => new GeminiProvider(key, model),
+            "claude" => new ClaudeProvider(key, model is { Length: > 0 } ? model : "claude-opus-5-5"),
+            _ => Services.Get(id) is { } svc ? new OpenAiCompatProvider(svc, key, model)
+                : throw new EditException("Unknown AI provider " + id),
+        };
     }
 
     static readonly (string id, string display, string keyUrl, string note, bool free)[] Paid =

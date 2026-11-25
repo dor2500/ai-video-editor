@@ -36,6 +36,7 @@ public sealed class OpenAiCompatProvider(OpenAiService service, string apiKey, s
 {
     static readonly HttpClient http = new() { Timeout = TimeSpan.FromMinutes(10) };
     readonly JsonArray messages = [];
+    string model = model;
     string Base => (baseUrlOverride ?? service.BaseUrl).TrimEnd('/');
 
     public string Display => service.Display;
@@ -57,6 +58,9 @@ public sealed class OpenAiCompatProvider(OpenAiService service, string apiKey, s
 
     public async Task<AiTurn> NextAsync(string system, List<ToolDef> tools, CancellationToken ct)
     {
+        if (string.IsNullOrEmpty(model))
+            model = (await ListModels(service, apiKey, baseUrlOverride)).FirstOrDefault()
+                    ?? throw new AiException($"{service.Display}: no tool-capable model found for this key", 404);
         var toolArr = new JsonArray();
         foreach (var t in tools)
             toolArr.Add(new JsonObject
