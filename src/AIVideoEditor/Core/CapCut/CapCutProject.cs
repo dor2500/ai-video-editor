@@ -21,6 +21,7 @@ public sealed class CapCutProject : EditorProject
         "add_media", "add_audio", "add_text", "edit_segments", "move_segment", "delete_segments", "split_segment",
         "reorder_main_track", "close_gaps", "set_track_mute", "set_track_hidden", "set_canvas", "set_transitions", "set_animations",
         "add_motion", "add_filter_or_effect", "set_audio_fade", "search_catalog",
+        "set_adjustments", "duplicate_segment", "reverse_segment", "freeze_frame", "extract_audio", "replace_media", "set_keyframes", "import_srt",
     };
 
     readonly string folder;
@@ -316,6 +317,13 @@ public sealed class CapCutProject : EditorProject
                     info["path"] = mat.Str("path").Replace('/', '\\');
                     info["source_dur"] = T.Sec(mat.Long("duration"));
                     info["file"] = Path.GetFileName(mat.Str("path")) is { Length: > 0 } fn ? fn : mat.Str("material_name");
+                    if (mat["crop"] is JsonObject cr)
+                    {
+                        double cl = cr.Dbl("upper_left_x"), crt = 1 - cr.Dbl("upper_right_x", 1),
+                               ct = cr.Dbl("upper_left_y"), cb = 1 - cr.Dbl("lower_left_y", 1);
+                        if (cl > 0 || crt > 0 || ct > 0 || cb > 0)
+                            info["crop"] = new JsonArray(Math.Round(cl, 3), Math.Round(crt, 3), Math.Round(ct, 3), Math.Round(cb, 3));
+                    }
                     break;
                 case "audios":
                     info["kind"] = "audio";
@@ -331,18 +339,28 @@ public sealed class CapCutProject : EditorProject
                         var t = content.Str("text");
                         info["text"] = t.Length > 80 ? t[..80] : t;
                         info["align"] = mat.Long("alignment", 1) switch { 0 => "left", 2 => "right", _ => "center" };
+                        if (mat.Dbl("letter_spacing") != 0) info["letter_spacing"] = mat.Dbl("letter_spacing");
+                        if (mat.Dbl("line_spacing", 0.02) != 0.02) info["line_spacing"] = mat.Dbl("line_spacing", 0.02);
+                        if (mat.Str("background_color") is { Length: > 0 } bgc)
+                        {
+                            info["background_color"] = bgc;
+                            info["background_alpha"] = mat.Dbl("background_alpha", 0.6);
+                        }
                         var st0 = content?["styles"]?.AsArray().FirstOrDefault();
                         if (st0 != null)
                         {
                             info["font_size"] = st0.Dbl("size", 8);
                             info["bold"] = st0.Bool("bold", false);
+                            info["italic"] = st0.Bool("italic", false);
                             if (st0["fill"]?["content"]?["solid"]?["color"] is JsonArray rgb && rgb.Count >= 3)
+                                info["color"] = RgbToHex(rgb);
+                            if (st0["strokes"]?.AsArray().FirstOrDefault() is JsonObject strk)
                             {
-                                int r = (int)Math.Round(Math.Clamp(rgb[0]!.GetValue<double>(), 0, 1) * 255);
-                                int g = (int)Math.Round(Math.Clamp(rgb[1]!.GetValue<double>(), 0, 1) * 255);
-                                int b = (int)Math.Round(Math.Clamp(rgb[2]!.GetValue<double>(), 0, 1) * 255);
-                                info["color"] = $"#{r:X2}{g:X2}{b:X2}";
+                                if (strk["content"]?["solid"]?["color"] is JsonArray srgb && srgb.Count >= 3)
+                                    info["stroke_color"] = RgbToHex(srgb);
+                                info["stroke_width"] = strk.Dbl("width", 0.08);
                             }
+                            if (st0["shadows"]?.AsArray().Count > 0) info["shadow"] = true;
                         }
                     }
                     catch { info["text"] = "?"; }
@@ -364,6 +382,13 @@ public sealed class CapCutProject : EditorProject
         }
         if (s.Dbl("volume", 1) != 1 && info.Str("kind") is "video" or "audio") info["volume"] = s.Dbl("volume", 1);
         if (s.Dbl("speed", 1) != 1) info["speed"] = s.Dbl("speed", 1);
+        if (s.Bool("reverse")) info["reverse"] = true;
+        if (s.Bool("is_tone_modify")) info["keep_pitch"] = true;
+        if (s.Str("blend_mode") is { Length: > 0 } bm && bm != "normal") info["blend_mode"] = bm;
+        if (s.Dbl("aive_corner_radius") is > 0 and var crd) info["corner_radius"] = crd;
+        if (s.Dbl("aive_audio_pan") is not 0 and var ap) info["audio_pan"] = ap;
+        if (s.Bool("aive_noise_reduction")) info["noise_reduction"] = true;
+        if (s.Bool("aive_freeze")) info["freeze"] = true;
         var fx = new JsonArray();
         foreach (var r in s["extra_material_refs"]?.AsArray() ?? [])
         {
@@ -385,10 +410,61 @@ public sealed class CapCutProject : EditorProject
                 if (fi > 0) info["fade_in"] = T.Sec(fi);
                 if (fo > 0) info["fade_out"] = T.Sec(fo);
             }
+            else if (k == "canvases" && em != null)
+            {
+                if (em.Dbl("blur") > 0) info["canvas_blur"] = em.Dbl("blur");
+                if (em.Str("color") is { Length: > 0 } cc) info["canvas_color"] = cc;
+            }
+            else if (k == "vocal_separations" && em != null)
+            {
+                var ch = em.Long("choice");
+                if (ch == 1) info["vocal_isolation"] = "keep_vocals";
+                else if (ch == 2) info["vocal_isolation"] = "remove_vocals";
+            }
+            else if (k == "effects" && em?["aive_adjust"] is JsonObject adj)
+            {
+                info["adjust"] = adj.DeepClone();
+            }
         }
-        if (s["common_keyframes"] is JsonArray kfs && kfs.Count > 0) fx.Add("keyframes");
+        if (s["common_keyframes"] is JsonArray kfs && kfs.Count > 0)
+        {
+            fx.Add("keyframes");
+            info["keyframes"] = SummarizeKeyframes(kfs);
+        }
         if (fx.Count > 0) info["fx"] = fx;
         return info;
+    }
+
+    static string RgbToHex(JsonArray rgb)
+    {
+        int r = (int)Math.Round(Math.Clamp(rgb[0]!.GetValue<double>(), 0, 1) * 255);
+        int g = (int)Math.Round(Math.Clamp(rgb[1]!.GetValue<double>(), 0, 1) * 255);
+        int b = (int)Math.Round(Math.Clamp(rgb[2]!.GetValue<double>(), 0, 1) * 255);
+        return $"#{r:X2}{g:X2}{b:X2}";
+    }
+
+    static JsonArray SummarizeKeyframes(JsonArray kfs)
+    {
+        var byTime = new SortedDictionary<long, JsonObject>();
+        foreach (var k in kfs)
+        {
+            var pt = k.Str("property_type");
+            foreach (var ptNode in k?["keyframe_list"]?.AsArray() ?? [])
+            {
+                long t = ptNode.Long("time_offset");
+                if (!byTime.TryGetValue(t, out var ko)) byTime[t] = ko = new JsonObject { ["t"] = T.Sec(t) };
+                double val = ptNode?["values"]?[0]?.GetValue<double>() ?? 0;
+                switch (pt)
+                {
+                    case "KFTypeScaleX": ko["scale"] = Math.Round(val, 3); break;
+                    case "KFTypePositionX": ko["x"] = Math.Round(val, 3); break;
+                    case "KFTypePositionY": ko["y"] = Math.Round(val, 3); break;
+                    case "KFTypeRotation": ko["rot"] = Math.Round(val, 3); break;
+                    case "KFTypeAlpha": ko["opacity"] = Math.Round(val, 3); break;
+                }
+            }
+        }
+        return new JsonArray(byTime.Values.Select(v => (JsonNode)v).ToArray());
     }
 
     JsonObject DescribeId(string id) => Describe(FindSegment(id).seg);
@@ -415,6 +491,14 @@ public sealed class CapCutProject : EditorProject
         "add_filter_or_effect" => AddTrackEffect(a.Req("category"), Catalog.Get(a.Req("category"), a.Req("name")),
             a.ReqD("start"), a.ReqD("duration"), a.D("intensity", 1.0)),
         "set_audio_fade" => new JsonArray(a.L("ids").Select(id => (JsonNode)SetAudioFade(id, a.D("fade_in", 0), a.D("fade_out", 0))).ToArray()),
+        "set_adjustments" => SetAdjustments(a),
+        "duplicate_segment" => DuplicateSegment(a.Req("id")),
+        "reverse_segment" => ReverseSegment(a.Req("id"), a.B("reversed")),
+        "freeze_frame" => FreezeFrame(a.Req("id"), a.ReqD("at"), a.D("duration", 3.0)),
+        "extract_audio" => ExtractAudio(a.Req("id")),
+        "replace_media" => ReplaceMedia(a.Req("id"), a.Req("path")),
+        "set_keyframes" => SetKeyframes(a),
+        "import_srt" => ImportSrt(a),
         _ => throw new EditException($"'{tool}' is not supported for CapCut projects"),
     };
 
@@ -665,7 +749,40 @@ public sealed class CapCutProject : EditorProject
                 if (FindMaterial(r!.GetValue<string>()) is ("speeds", { } sm)) sm["speed"] = spd2;
         }
         if (ch.B("visible") is { } vis) s["visible"] = vis;
+        if (ch.B("reverse") is { } rev) s["reverse"] = rev;
+        if (ch.B("keep_pitch") is { } kp) s["is_tone_modify"] = kp;
+        if (ch.S("blend_mode") is { } bm) s["blend_mode"] = bm;
+        if (ch.D("corner_radius") is { } crd) s["aive_corner_radius"] = Math.Clamp(crd, 0, 1);
+        if (ch.D("audio_pan") is { } ap) s["aive_audio_pan"] = Math.Clamp(ap, -1, 1);
+        if (ch.B("noise_reduction") is { } nr) s["aive_noise_reduction"] = nr;
+        if (ch.D("canvas_blur") is not null || ch.S("canvas_color") is not null)
+        {
+            foreach (var r in s["extra_material_refs"]!.AsArray())
+                if (FindMaterial(r!.GetValue<string>()) is ("canvases", { } cm))
+                {
+                    if (ch.D("canvas_blur") is { } cb) { cm["blur"] = Math.Clamp(cb, 0, 1); cm["type"] = cb > 0 ? "canvas_blur" : "canvas_color"; }
+                    if (ch.S("canvas_color") is { } cc) cm["color"] = cc == "" ? "" : Colors.Hex(cc);
+                }
+        }
+        if (ch.S("vocal_isolation") is { } vi)
+        {
+            int choice = vi switch { "keep_vocals" => 1, "remove_vocals" => 2, _ => 0 };
+            foreach (var r in s["extra_material_refs"]!.AsArray())
+                if (FindMaterial(r!.GetValue<string>()) is ("vocal_separations", { } vm)) vm["choice"] = choice;
+        }
         var (k2, m2) = FindMaterial(s.Str("material_id"));
+        if (k2 == "videos" && m2?["crop"] is JsonObject crop &&
+            (ch.D("crop_left") is not null || ch.D("crop_right") is not null || ch.D("crop_top") is not null || ch.D("crop_bottom") is not null))
+        {
+            double cl = ch.D("crop_left") is { } vcl ? Math.Clamp(vcl, 0, 0.9) : crop.Dbl("upper_left_x");
+            double cr = ch.D("crop_right") is { } vcr ? 1 - Math.Clamp(vcr, 0, 0.9) : crop.Dbl("upper_right_x", 1);
+            double ct = ch.D("crop_top") is { } vct ? Math.Clamp(vct, 0, 0.9) : crop.Dbl("upper_left_y");
+            double cb = ch.D("crop_bottom") is { } vcb ? 1 - Math.Clamp(vcb, 0, 0.9) : crop.Dbl("lower_left_y", 1);
+            crop["upper_left_x"] = cl; crop["lower_left_x"] = cl;
+            crop["upper_right_x"] = cr; crop["lower_right_x"] = cr;
+            crop["upper_left_y"] = ct; crop["upper_right_y"] = ct;
+            crop["lower_left_y"] = cb; crop["lower_right_y"] = cb;
+        }
         if (k2 == "texts" && m2 != null)
         {
             var content = JsonNode.Parse(m2.Str("content", "{}"))!.AsObject();
@@ -676,6 +793,21 @@ public sealed class CapCutProject : EditorProject
                 while (styles.Count > 1) styles.RemoveAt(styles.Count - 1);
                 foreach (var sty in styles) sty!["range"] = new JsonArray(0, txt.Length);
             }
+            if (ch.S("align") is { } al) m2["alignment"] = al switch { "left" => 0, "right" => 2, _ => 1 };
+            if (ch.D("letter_spacing") is { } ls) m2["letter_spacing"] = ls;
+            if (ch.D("line_spacing") is { } lns) m2["line_spacing"] = lns;
+            if (ch.S("background_color") is { } bg)
+            {
+                if (bg == "") { m2["background_style"] = 0; m2["background_color"] = ""; }
+                else
+                {
+                    m2["background_style"] = 1;
+                    m2["background_color"] = Colors.Hex(bg);
+                    m2["background_alpha"] = ch.D("background_alpha", m2.Dbl("background_alpha", 0.6));
+                }
+            }
+            else if (ch.D("background_alpha") is { } bga) m2["background_alpha"] = Math.Clamp(bga, 0, 1);
+
             foreach (var sty in styles)
             {
                 if (ch.D("font_size") is { } fs) sty!["size"] = fs;
@@ -689,6 +821,32 @@ public sealed class CapCutProject : EditorProject
                     },
                 };
                 if (ch.B("bold") is { } b) sty!["bold"] = b;
+                if (ch.B("italic") is { } it) sty!["italic"] = it;
+                if (ch.S("stroke_color") is { } sc2)
+                {
+                    sty!["strokes"] = sc2 == "" ? new JsonArray() : new JsonArray(new JsonObject
+                    {
+                        ["content"] = new JsonObject { ["solid"] = new JsonObject { ["alpha"] = 1.0, ["color"] = Json.From(Colors.Rgb(sc2)) } },
+                        ["width"] = ch.D("stroke_width", 0.08),
+                    });
+                }
+                if (ch.B("shadow") is { } sh)
+                {
+                    sty!["shadows"] = sh ? new JsonArray(new JsonObject
+                    {
+                        ["diffuse"] = 0.025, ["alpha"] = 0.8, ["distance"] = 5.0,
+                        ["content"] = new JsonObject { ["solid"] = new JsonObject { ["color"] = new JsonArray(0, 0, 0) } }, ["angle"] = -45.0,
+                    }) : new JsonArray();
+                }
+                if (ch.S("font") is { Length: > 0 } fontName)
+                {
+                    try
+                    {
+                        var f = Catalog.Get("font", fontName);
+                        sty!["font"] = new JsonObject { ["id"] = f.ResourceId, ["path"] = "D:" };
+                    }
+                    catch { }
+                }
             }
             m2["content"] = content.ToJsonString(Json.Relaxed);
             if (m2["words"] is JsonObject) m2["words"] = new JsonObject
@@ -701,6 +859,235 @@ public sealed class CapCutProject : EditorProject
                 if (o.Str("id") != id && Start(o) >= oldEnd) SetStart(o, Start(o) + newEnd - oldEnd);
         SortTrack(track);
         return DescribeId(id);
+    }
+
+    JsonObject CloneSegment(JsonObject srcSeg)
+    {
+        var b = srcSeg.DeepClone().AsObject();
+        b["id"] = Ids.CapCut();
+        var newRefs = new JsonArray();
+        foreach (var r in b["extra_material_refs"]!.AsArray())
+        {
+            var rid = r!.GetValue<string>();
+            var (k, em) = FindMaterial(rid);
+            if (k != null && (PerSegmentMaterials.Contains(k) || (k == "effects" && em?["aive_adjust"] != null)))
+            {
+                var cp = em!.DeepClone().AsObject();
+                cp["id"] = Ids.CapCut();
+                MList(k).Add(cp);
+                newRefs.Add(cp.Str("id"));
+            }
+            else if (k != "transitions") newRefs.Add(rid);
+        }
+        b["extra_material_refs"] = newRefs;
+        return b;
+    }
+
+    JsonNode SetAdjustments(Args a)
+    {
+        bool reset = a.B("reset", false);
+        var res = new JsonArray();
+        foreach (var sid in IdsOrAllMain(a))
+        {
+            var (_, s, _) = FindSegment(sid);
+            var refs = s["extra_material_refs"]!.AsArray();
+            JsonObject? adjMat = null;
+            foreach (var r in refs)
+                if (FindMaterial(r!.GetValue<string>()) is ("effects", { } em) && em["aive_adjust"] != null) adjMat = em;
+            if (reset)
+            {
+                if (adjMat != null)
+                {
+                    foreach (var r in refs.ToList()) if (r!.GetValue<string>() == adjMat.Str("id")) refs.Remove(r);
+                }
+                res.Add(DescribeId(s.Str("id")));
+                continue;
+            }
+            if (adjMat == null)
+            {
+                adjMat = new JsonObject
+                {
+                    ["id"] = Ids.CapCut(), ["type"] = "adjust", ["name"] = "Color Adjustment",
+                    ["aive_adjust"] = new JsonObject(),
+                };
+                MList("effects").Add(adjMat);
+                refs.Add(adjMat.Str("id"));
+            }
+            var o = adjMat["aive_adjust"]!.AsObject();
+            foreach (var k in new[] { "brightness", "contrast", "saturation", "temperature", "hue", "sharpen", "highlights", "shadows", "vignette", "fade" })
+                if (a.D(k) is { } val) o[k] = val;
+            res.Add(DescribeId(s.Str("id")));
+        }
+        return res;
+    }
+
+    JsonNode DuplicateSegment(string sid)
+    {
+        var (track, s, idx) = FindSegment(sid);
+        var copy = CloneSegment(s);
+        long end = Start(s) + Dur(s);
+        SetStart(copy, end);
+        bool isMain = ReferenceEquals(track, MainTrack(false));
+        if (isMain)
+        {
+            foreach (var o in Segs(track)) if (Start(o) >= end) SetStart(o, Start(o) + Dur(copy));
+            track["segments"]!.AsArray().Insert(idx + 1, copy);
+        }
+        else
+        {
+            var dest = FreeAt(track, end, Dur(copy)) ? track : PickTrack(track.Str("type"), end, Dur(copy));
+            dest["segments"]!.AsArray().Add(copy);
+            SortTrack(dest);
+        }
+        return DescribeId(copy.Str("id"));
+    }
+
+    JsonNode ReverseSegment(string sid, bool? reversed)
+    {
+        var (_, s, _) = FindSegment(sid);
+        s["reverse"] = reversed ?? !s.Bool("reverse");
+        return DescribeId(s.Str("id"));
+    }
+
+    JsonNode FreezeFrame(string sid, double atSec, double durSec)
+    {
+        if (durSec <= 0) throw new EditException("Freeze duration must be > 0");
+        var (track, s, idx) = FindSegment(sid);
+        long atUs = T.Us(atSec), holdUs = T.Us(durSec);
+        if (atUs > Start(s) + 10_000 && atUs < Start(s) + Dur(s) - 10_000)
+        {
+            SplitSegment(s.Str("id"), atSec);
+            (track, s, idx) = FindSegment(s.Str("id"));
+        }
+        var hold = CloneSegment(s);
+        long insertAt = Start(s) + Dur(s);
+        hold["target_timerange"] = new JsonObject { ["start"] = insertAt, ["duration"] = holdUs };
+        if (hold["source_timerange"] is JsonObject src)
+        {
+            long frameStart = src.Long("start") + src.Long("duration");
+            hold["source_timerange"] = new JsonObject { ["start"] = Math.Max(0, frameStart - 33_333), ["duration"] = 33_333 };
+            hold["speed"] = 33_333.0 / holdUs;
+        }
+        hold["aive_freeze"] = true;
+        bool isMain = ReferenceEquals(track, MainTrack(false));
+        if (isMain)
+        {
+            foreach (var o in Segs(track)) if (Start(o) >= insertAt) SetStart(o, Start(o) + holdUs);
+            track["segments"]!.AsArray().Insert(idx + 1, hold);
+        }
+        else
+        {
+            var dest = FreeAt(track, insertAt, holdUs) ? track : PickTrack(track.Str("type"), insertAt, holdUs);
+            dest["segments"]!.AsArray().Add(hold);
+            SortTrack(dest);
+        }
+        return DescribeId(hold.Str("id"));
+    }
+
+    JsonNode ExtractAudio(string sid)
+    {
+        var (_, s, _) = FindSegment(sid);
+        var (key, mat) = FindMaterial(s.Str("material_id"));
+        if (key != "videos" || mat == null || mat.Str("type") == "photo")
+            throw new EditException("Extract audio requires a video clip");
+        var path = mat.Str("path").Replace('/', '\\');
+        var pr = Media.Probe(path);
+        var amat = AudioMaterial(path, pr);
+        long st = Start(s), du = Dur(s), src0 = s["source_timerange"]?.Long("start") ?? 0;
+        var tr = PickTrack("audio", st, du);
+        var aseg = BaseSegment(amat.Str("id"), st, du, src0, [Speed(), SoundMap(), VocalSep()], false, 0, s.Dbl("volume", 1.0));
+        aseg["speed"] = s.Dbl("speed", 1.0);
+        tr["segments"]!.AsArray().Add(aseg);
+        SortTrack(tr);
+        s["volume"] = 0.0;
+        return new JsonObject { ["video"] = DescribeId(s.Str("id")), ["audio"] = DescribeId(aseg.Str("id")) };
+    }
+
+    JsonNode ReplaceMedia(string sid, string rawPath)
+    {
+        var (_, s, _) = FindSegment(sid);
+        var path = Paths.Expand(rawPath);
+        var pr = Media.Probe(path);
+        bool isAudio = pr.Kind == MediaKind.Audio;
+        var mat = isAudio ? AudioMaterial(path, pr) : VideoMaterial(path, pr);
+        s["material_id"] = mat.Str("id");
+        double spd = s.Dbl("speed", 1.0);
+        if (pr.Kind == MediaKind.Photo)
+            s["source_timerange"] = new JsonObject { ["start"] = 0, ["duration"] = Dur(s) };
+        else
+        {
+            long newDur = Math.Min(Dur(s), (long)(pr.DurationUs / spd));
+            s["target_timerange"]!["duration"] = Math.Max(100_000, newDur);
+            s["source_timerange"] = new JsonObject { ["start"] = 0, ["duration"] = (long)(Math.Max(100_000, newDur) * spd) };
+        }
+        return DescribeId(s.Str("id"));
+    }
+
+    JsonNode SetKeyframes(Args a)
+    {
+        var (_, s, _) = FindSegment(a.Req("id"));
+        var kfs = s.Arr("common_keyframes");
+        if (a.Req("action").Equals("clear", StringComparison.OrdinalIgnoreCase))
+        {
+            kfs.Clear();
+            return DescribeId(s.Str("id"));
+        }
+        long rel = Math.Clamp(T.Us(a.D("at", T.Sec(Start(s)))) - Start(s), 0, Dur(s));
+        var clip = s["clip"]?.AsObject();
+        void Upsert(string prop, double val)
+        {
+            var trackObj = kfs.Select(x => x!.AsObject()).FirstOrDefault(x => x.Str("property_type") == prop);
+            if (trackObj == null)
+            {
+                trackObj = new JsonObject { ["id"] = Ids.CapCut(), ["material_id"] = "", ["property_type"] = prop, ["keyframe_list"] = new JsonArray() };
+                kfs.Add(trackObj);
+            }
+            var list = trackObj["keyframe_list"]!.AsArray();
+            foreach (var old in list.ToList()) if (Math.Abs(old.Long("time_offset") - rel) < 20_000) list.Remove(old);
+            list.Add(new JsonObject
+            {
+                ["curveType"] = "Line", ["graphID"] = "",
+                ["left_control"] = new JsonObject { ["x"] = 0.0, ["y"] = 0.0 },
+                ["right_control"] = new JsonObject { ["x"] = 0.0, ["y"] = 0.0 },
+                ["id"] = Ids.CapCut(), ["time_offset"] = rel, ["values"] = new JsonArray(val),
+            });
+            var sorted = list.OrderBy(x => x.Long("time_offset")).ToList();
+            list.Clear();
+            foreach (var item in sorted) list.Add(item);
+        }
+        double curScale = clip?["scale"].Dbl("x", 1) ?? 1;
+        double curX = clip?["transform"].Dbl("x") ?? 0;
+        double curY = clip?["transform"].Dbl("y") ?? 0;
+        double curRot = clip?.Dbl("rotation") ?? 0;
+        double curAlpha = clip?.Dbl("alpha", 1) ?? 1;
+        Upsert("KFTypeScaleX", a.D("scale") ?? curScale);
+        Upsert("KFTypeScaleY", a.D("scale") ?? curScale);
+        Upsert("KFTypePositionX", a.D("x") ?? curX);
+        Upsert("KFTypePositionY", a.D("y") ?? curY);
+        Upsert("KFTypeRotation", a.D("rotation") ?? curRot);
+        Upsert("KFTypeAlpha", a.D("opacity") ?? curAlpha);
+        return DescribeId(s.Str("id"));
+    }
+
+    JsonNode ImportSrt(Args a)
+    {
+        var raw = a.S("srt_text") is { Length: > 0 } st ? st
+            : a.S("path") is { Length: > 0 } p ? File.ReadAllText(Paths.Expand(p))
+            : throw new EditException("Provide 'srt_text' or 'path'");
+        var cues = Srt.Parse(raw);
+        if (cues.Count == 0) throw new EditException("No valid SRT subtitle cues found");
+        var res = new JsonArray();
+        foreach (var (sUs, dUs, txt) in cues)
+        {
+            var args = new JsonObject
+            {
+                ["text"] = txt, ["start"] = T.Sec(sUs), ["duration"] = T.Sec(dUs),
+                ["font_size"] = a.D("font_size", 9), ["color"] = a.S("color", "#FFFFFF"),
+                ["y"] = a.D("y", -0.75), ["stroke_color"] = a.S("stroke_color", "#000000"),
+            };
+            res.Add(AddText(new Args(args)));
+        }
+        return res;
     }
 
     JsonNode MoveSegment(string sid, double? start, string? toTrack)

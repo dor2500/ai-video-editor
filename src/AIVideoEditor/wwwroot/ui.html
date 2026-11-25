@@ -24,6 +24,7 @@
           <button onclick="closeMenu(); openFile()">Open Project File...</button>
           <button onclick="closeMenu(); setBinTab('projects')">Switch Editor / Project</button>
           <hr>
+          <button onclick="closeMenu(); importSrtDialog()">Import Captions (.SRT)...</button>
           <button onclick="closeMenu(); showSettings()">AI Provider Settings</button>
           <button onclick="closeMenu(); api.reveal()">Reveal Project in Explorer</button>
         </div>
@@ -53,7 +54,7 @@
 
   <!-- Upper 3-Pane Workspace -->
   <div class="workspace" id="workspace">
-    <!-- Left Media & Asset Bin -->
+    <!-- Left Media & CapCut Asset Bin -->
     <section class="pane">
       <div class="bin-tabs" id="binTabs">
         <button class="bin-tab active" data-tab="media" onclick="setBinTab('media')">
@@ -68,6 +69,10 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
           <span>Text</span>
         </button>
+        <button class="bin-tab" data-tab="stickers" onclick="setBinTab('stickers')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>
+          <span>Stickers</span>
+        </button>
         <button class="bin-tab" data-tab="effects" onclick="setBinTab('effects')">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3l2.2 4.5L19 9.7l-4.8 2.2L12 16.5l-2.2-4.6L5 9.7l4.8-2.2L12 3z"/></svg>
           <span>Effects</span>
@@ -76,9 +81,21 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 6l8 6-8 6V6zM20 6l-8 6 8 6V6z"/></svg>
           <span>Transitions</span>
         </button>
+        <button class="bin-tab" data-tab="captions" onclick="setBinTab('captions')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 13h4M13 13h4M7 16h10"/></svg>
+          <span>Captions</span>
+        </button>
         <button class="bin-tab" data-tab="filters" onclick="setBinTab('filters')">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8" r="5"/><circle cx="8" cy="15" r="5"/><circle cx="16" cy="15" r="5"/></svg>
           <span>Filters</span>
+        </button>
+        <button class="bin-tab" data-tab="adjustment" onclick="setBinTab('adjustment')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+          <span>Adjustment</span>
+        </button>
+        <button class="bin-tab" data-tab="templates" onclick="setBinTab('templates')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="5" rx="1"/><rect x="13" y="10" width="8" height="11" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/></svg>
+          <span>Templates</span>
         </button>
         <button class="bin-tab" data-tab="projects" onclick="setBinTab('projects')">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
@@ -110,6 +127,7 @@
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 9l5 3-5 3V9z"/></svg>
             <div>Open a project or import media to preview</div>
           </div>
+          <div class="stage-vignette" id="stageVignette"></div>
           <div class="safe-grid" id="safeGrid"></div>
         </div>
       </div>
@@ -173,7 +191,7 @@
           <button class="ghost" style="padding:2px 7px;font-size:11px" onclick="newChat()">New Chat</button>
         </div>
         <div class="chat-log" id="chatLog">
-          <div class="chat-msg sys" id="chatWelcome">Ask EditPilot to assemble clips, add music, titles, transitions, Ken Burns motion, or color filters.</div>
+          <div class="chat-msg sys" id="chatWelcome">Ask EditPilot to assemble clips, add music, captions, transitions, Ken Burns motion, or color grading.</div>
         </div>
         <div class="composer">
           <div class="chips">
@@ -220,14 +238,33 @@
         <button class="icon-btn" onclick="splitAtPlayhead()" title="Split clip at playhead (Ctrl+B)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M4 7h4v10H4M20 7h-4v10h4"/></svg>
         </button>
-        <button class="icon-btn" onclick="trimToPlayhead('left')" title="Trim clip start to playhead">
+        <button class="icon-btn" onclick="trimToPlayhead('left')" title="Trim clip start to playhead ([)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4v16M9 12h11M13 8l-4 4 4 4"/></svg>
         </button>
-        <button class="icon-btn" onclick="trimToPlayhead('right')" title="Trim clip end to playhead">
+        <button class="icon-btn" onclick="trimToPlayhead('right')" title="Trim clip end to playhead (])">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 4v16M15 12H4M11 8l4 4-4 4"/></svg>
+        </button>
+        <button class="icon-btn" onclick="duplicateSelected()" title="Duplicate selected clip (Ctrl+D)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>
         <button class="icon-btn" onclick="deleteSelected()" title="Delete selected clip (Del)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0v14h10V6"/></svg>
+        </button>
+        <div class="tl-sep"></div>
+        <button class="icon-btn" onclick="freezeSelected()" title="Freeze Frame at playhead (F)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M4.9 4.9l14.2 14.2M19.1 4.9L4.9 19.1"/></svg>
+        </button>
+        <button class="icon-btn" onclick="reverseSelected()" title="Reverse clip playback (R)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </button>
+        <button class="icon-btn" onclick="rotateSelected90()" title="Rotate clip +90°">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+        </button>
+        <button class="icon-btn" onclick="mirrorSelected()" title="Mirror / Flip horizontal">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M8 7l-5 5 5 5V7zM16 7l5 5-5 5V7z"/></svg>
+        </button>
+        <button class="icon-btn" onclick="extractAudioSelected()" title="Extract audio from video clip">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
         </button>
         <div class="tl-sep"></div>
         <button class="icon-btn" onclick="addMarkerAtPlayhead()" title="Add timeline marker (M)">
@@ -276,6 +313,25 @@
       </div>
     </div>
   </section>
+</div>
+
+<!-- Right-Click Clip Context Menu -->
+<div class="ctx-menu" id="clipCtxMenu">
+  <button onclick="ctxAction('split')"><span>Split at Playhead</span><span class="k">Ctrl+B</span></button>
+  <button onclick="ctxAction('duplicate')"><span>Duplicate</span><span class="k">Ctrl+D</span></button>
+  <button onclick="ctxAction('delete')"><span>Delete</span><span class="k">Del</span></button>
+  <hr>
+  <button onclick="ctxAction('freeze')"><span>Freeze Frame</span><span class="k">F</span></button>
+  <button onclick="ctxAction('reverse')"><span>Reverse Clip</span><span class="k">R</span></button>
+  <button onclick="ctxAction('rotate')"><span>Rotate +90°</span><span class="k"></span></button>
+  <button onclick="ctxAction('mirror')"><span>Mirror Horizontal</span><span class="k"></span></button>
+  <button onclick="ctxAction('extract_audio')"><span>Extract Audio</span><span class="k"></span></button>
+  <button onclick="ctxAction('replace')"><span>Replace Media...</span><span class="k"></span></button>
+  <hr>
+  <button onclick="ctxAction('copy_attrs')"><span>Copy Attributes</span><span class="k"></span></button>
+  <button onclick="ctxAction('paste_attrs')"><span>Paste Attributes</span><span class="k"></span></button>
+  <button onclick="ctxAction('move_earlier')"><span>Move Earlier on Track</span><span class="k"></span></button>
+  <button onclick="ctxAction('move_later')"><span>Move Later on Track</span><span class="k"></span></button>
 </div>
 
 <!-- Floating EditPilot Pill -->

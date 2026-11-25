@@ -248,3 +248,37 @@ public static class Colors
         return "#" + string.Concat(r.Select(v => ((int)Math.Round(v * 255)).ToString("X2")));
     }
 }
+
+public static class Srt
+{
+    public static List<(long StartUs, long DurUs, string Text)> Parse(string srtText)
+    {
+        var res = new List<(long, long, string)>();
+        var blocks = srtText.Replace("\r\n", "\n").Split("\n\n", StringSplitOptions.RemoveEmptyEntries);
+        foreach (var block in blocks)
+        {
+            var lines = block.Split('\n');
+            int tsIdx = Array.FindIndex(lines, l => l.Contains("-->"));
+            if (tsIdx < 0) continue;
+            var parts = lines[tsIdx].Split("-->", StringSplitOptions.TrimEntries);
+            if (parts.Length != 2) continue;
+            if (!TryTime(parts[0], out var t0) || !TryTime(parts[1], out var t1) || t1 <= t0) continue;
+            var text = string.Join("\n", lines.Skip(tsIdx + 1)).Trim();
+            if (text != "") res.Add((t0, t1 - t0, text));
+        }
+        return res;
+    }
+
+    static bool TryTime(string s, out long us)
+    {
+        us = 0;
+        var norm = s.Trim().Replace(',', '.');
+        var parts = norm.Split(':');
+        if (parts.Length != 3) return false;
+        if (!int.TryParse(parts[0], out int h) || !int.TryParse(parts[1], out int m) ||
+            !double.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double sec))
+            return false;
+        us = T.Us(h * 3600 + m * 60 + sec);
+        return true;
+    }
+}

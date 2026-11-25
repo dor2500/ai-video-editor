@@ -12,10 +12,11 @@ Chat with an AI that edits your video project for you: *"take all the photos fro
 
 תוכנה לווינדוס בסביבת עריכה מלאה במצב כהה (Dark Mode) עם ציר זמן אינטראקטיבי רב-ערוצי, תצוגה מקדימה חיה, ספריית מדיה, עורך מאפיינים ו-**EditPilot** — עוזר ה-AI שעורך עבורכם את הפרויקט ישירות בתוכנת העריכה.
 
-### מה חדש ב-v2.3.0 (כולל כל יכולות v2.2.0)
-- **סביבת עריכה שלמה במצב כהה:** ספריית מדיה עם תצוגות מקדימות ותגי `Added`, נגן וידאו/אודיו חי עם Timecode ובחירת יחס מסך, חלונית `Project / Details` וצ'אט `EditPilot`.
-- **ציר זמן רב-ערוצי אינטראקטיבי:** פסי סרטונים עם Filmstrip, גלי קול (Waveforms) לערוצי אודיו, גרירה והזזה בין ערוצים, חיתוך ופיצול קליפים בראש הנגינה, מגנט/Snapping, נעילה/השתקה/הסתרה של ערוצים, זום ו-Undo/Redo.
-- **עריכה חכמה בלחיצה (Smart Suggestions & Global Edits):** החלת מעברים לכל הקליפים, תנועת Ken Burns לתמונות, השתקה של סאונד מקורי וסגירת רווחים.
+### מה חדש ב-v2.4.0 (כולל כל יכולות v2.2.0 ו-v2.3.0)
+- **כל כלי העריכה בסגנון CapCut ישירות באפליקציה:**
+  - לשוניות משאבים מלאות: **Media, Audio, Text, Stickers, Effects, Transitions, Captions (כולל ייבוא `.srt`), Filters, Adjustment (פרופילים מוכנים לצבע), Templates ו-Projects**.
+  - **חלונית עריכה מתקדמת (`Details`):** לשוניות ייעודיות לקליפ הנבחר — **Basic** (מיקום, גודל, סיבוב, חיתוך Crop, פינות מעוגלות, מצב מיזוג Blend Mode, טשטוש/צבע רקע, Keyframes, העתק/הדבק מאפיינים והחלפת מדיה), **Speed** (מהירות, שמירה על Pitch, היפוך Reverse), **Anim** (אנימציות כניסה/יציאה/Combo ותנועת Ken Burns), **Adjust** (10 מחוונים לתיקון צבע עם תצוגה חיה), **Audio** (עוצמה, Fade, Pan, הפחתת רעשים, בידוד קול ו-**Extract Audio**), ו-**Text** (פונטים, יישור, קו מתאר, רקע, צל ומרווחים).
+  - **ציר זמן מקצועי:** בחירה מרובה (`Ctrl+Click`), תפריט לחיצה ימנית על קליפים, **Freeze Frame**, **Duplicate**, **Reverse**, **Rotate 90°**, **Mirror**, גרירה, חיתוך ופיצול בראש הנגינה.
 - **מעבר אוטומטי בין שירותי AI, גרירה ושחרור והתראת עדכון (מ-v2.2.0):** גרירת קבצים ותיקיות לחלון, בחירת מודל אוטומטית, כפתור עדכון כשיוצאת גרסה חדשה, ומעבר אוטומטי בין ספקי AI כשנגמרת המכסה.
 
 ### התקנה
@@ -72,10 +73,10 @@ Chat with an AI that edits your video project for you: *"take all the photos fro
 
 A Windows desktop video editing studio in permanent Dark Mode featuring a media bin, live preview stage, property inspector, interactive multi-track timeline, and **EditPilot** — an AI assistant that edits your project directly in your video editor.
 
-### Highlights (v2.3.0 + v2.2.0)
-- **Dark Desktop Workspace:** 4-pane CapCut-inspired layout with a Media/Audio/Text/Transitions/Effects/Filters/Projects bin, thumbnail cards with `Added` and duration badges, live preview player with SMPTE timecode and aspect ratio switcher, `Project` & `Details` inspector, and `EditPilot` AI chat.
-- **Interactive Multi-Track Timeline:** Filmstrip video clips, decoded audio waveforms, snapping playhead scrubbing, drag-to-move across tracks, edge trimming, split/razor, ripple delete, track mute/lock/visibility toggles, markers, zoom controls, and Undo/Redo.
-- **AI Service Fallback & Usability:** Automatic fallback across saved AI providers on quota/credit limits (free tiers first), automatic model selection, drag-and-drop files/folders onto the window, and an update notice when a new GitHub release is available.
+### Highlights (v2.4.0 + v2.2.0–v2.3.0)
+- **Full CapCut-Style Editing Suite:** Asset tabs for **Media, Audio, Text, Stickers, Effects, Transitions, Captions (`.srt` import), Filters, Adjustment (color grading presets), Templates, and Projects**; contextual clip sub-tabs (**Basic, Speed, Anim, Adjust, Audio, Text**) with live CSS preview filtering, crop, blend modes, canvas blur/color, keyframes, reverse, freeze frame, duplicate, extract audio, replace media, and copy/paste attributes.
+- **Dark Desktop Workspace & Interactive Multi-Track Timeline:** Filmstrip video clips, decoded audio waveforms, multi-clip `Ctrl+Click` selection, right-click clip context menu, snapping playhead scrubbing, drag-to-move across tracks, edge trimming, split/razor, ripple delete, track mute/lock/visibility toggles, markers, zoom controls, and Undo/Redo.
+- **AI Service Fallback & Usability:** EditPilot AI assistant with automatic fallback across saved AI providers on quota/credit limits (free tiers first), automatic model selection, drag-and-drop files/folders onto the window, and an update notice when a new GitHub release is available.
 
 ### Install
 Download `AIVideoEditor-Setup-<version>.exe` from [Releases](https://github.com/dor2500/ai-video-editor/releases/latest). It installs per user and needs no admin rights. A portable exe is also attached. On first start, pick an AI service and paste its API key. Keys are stored encrypted with Windows DPAPI. Free services: **Gemini** Flash models (the default), **Groq**, **OpenRouter** `:free` models, **Cerebras** and **Mistral** (Experiment plan). Paid: **Claude**. Free tiers have request limits, and an edit takes several model calls. When one service runs out of quota or credit, the app switches automatically to the next service you have a key for. Files and folders can be dragged into the chat, and the app shows a button when a new release is out.

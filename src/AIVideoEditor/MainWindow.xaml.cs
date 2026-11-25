@@ -508,15 +508,36 @@ public partial class MainWindow : Window
                 var cat = A(a, 0, "transition");
                 var q = A(a, 1, "");
                 var p = agent?.Project;
-                if (p != null && p.SupportedTools.Contains("search_catalog"))
+                if (p != null && p.EditorId == "capcut" && p.SupportedTools.Contains("search_catalog"))
                     return p.Run("search_catalog", new Args(new JsonObject { ["category"] = cat, ["query"] = q, ["limit"] = 60 }));
-                if (cat == "transition")
-                    return GenericCatalog.Transitions.Select(x => new { name = x.Name, description = x.Desc });
-                if (cat is "video_in" or "text_in")
-                    return new[] { new { name = GenericCatalog.Animations[0].Name, description = GenericCatalog.Animations[0].Desc } };
-                if (cat is "video_out" or "text_out")
-                    return new[] { new { name = GenericCatalog.Animations[1].Name, description = GenericCatalog.Animations[1].Desc } };
-                return Array.Empty<object>();
+                return cat switch
+                {
+                    "transition" => GenericCatalog.Transitions.Select(x => new { name = x.Name, description = x.Desc }),
+                    "video_in" or "text_in" => new[] { new { name = GenericCatalog.Animations[0].Name, description = GenericCatalog.Animations[0].Desc } },
+                    "video_out" or "text_out" => new[] { new { name = GenericCatalog.Animations[1].Name, description = GenericCatalog.Animations[1].Desc } },
+                    "font" => new[] { "Segoe UI", "Arial", "Impact", "Georgia", "Consolas", "Trebuchet MS" }
+                        .Where(f => q == "" || f.Contains(q, StringComparison.OrdinalIgnoreCase))
+                        .Select(f => new { name = f, description = "System font" }),
+                    _ => Array.Empty<object>(),
+                };
+            }
+            case "pick_srt":
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog
+                {
+                    Filter = "Subtitles|*.srt;*.txt|All files|*.*",
+                };
+                if (dlg.ShowDialog(this) != true) return null;
+                return new { path = dlg.FileName, text = File.ReadAllText(dlg.FileName) };
+            }
+            case "pick_single_media":
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog
+                {
+                    Multiselect = false,
+                    Filter = "Media|*.jpg;*.jpeg;*.png;*.webp;*.heic;*.bmp;*.gif;*.mp4;*.mov;*.avi;*.mkv;*.wmv;*.m4v;*.webm;*.mp3;*.wav;*.m4a;*.aac;*.flac;*.ogg|All files|*.*",
+                };
+                return dlg.ShowDialog(this) == true ? dlg.FileName : null;
             }
             case "export_project":
             {

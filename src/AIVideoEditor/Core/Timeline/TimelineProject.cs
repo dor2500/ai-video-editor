@@ -30,6 +30,7 @@ public sealed class TimelineProject : EditorProject
         "add_media", "add_audio", "add_text", "edit_segments", "move_segment", "delete_segments", "split_segment",
         "reorder_main_track", "close_gaps", "set_track_mute", "set_track_hidden", "set_canvas", "set_transitions", "set_animations",
         "add_motion", "set_audio_fade", "search_catalog",
+        "set_adjustments", "duplicate_segment", "reverse_segment", "freeze_frame", "extract_audio", "replace_media", "set_keyframes", "import_srt",
     };
 
     readonly EditorDef editor;
@@ -208,7 +209,14 @@ public sealed class TimelineProject : EditorProject
             o["font_size"] = c.FontSize;
             o["color"] = c.Color;
             o["bold"] = c.Bold;
+            o["italic"] = c.Italic;
             o["align"] = c.Align;
+            if (!string.IsNullOrEmpty(c.Font)) o["font"] = c.Font;
+            if (!string.IsNullOrEmpty(c.StrokeColor)) { o["stroke_color"] = c.StrokeColor; o["stroke_width"] = c.StrokeWidth; }
+            if (!string.IsNullOrEmpty(c.BackgroundColor)) { o["background_color"] = c.BackgroundColor; o["background_alpha"] = c.BackgroundAlpha; }
+            if (c.Shadow) o["shadow"] = true;
+            if (c.LetterSpacing != 0) o["letter_spacing"] = c.LetterSpacing;
+            if (c.LineSpacing != 0.02) o["line_spacing"] = c.LineSpacing;
         }
         else if (c.FileName != "") o["file"] = c.FileName;
         if (c.X != 0 || c.Y != 0) o["pos"] = new JsonArray(Math.Round(c.X, 3), Math.Round(c.Y, 3));
@@ -217,6 +225,43 @@ public sealed class TimelineProject : EditorProject
         if (c.Opacity != 1) o["opacity"] = c.Opacity;
         if (c.Volume != 1 && c.Kind is "video" or "audio") o["volume"] = c.Volume;
         if (c.Speed != 1) o["speed"] = c.Speed;
+        if (c.Reverse) o["reverse"] = true;
+        if (c.KeepPitch) o["keep_pitch"] = true;
+        if (c.BlendMode != "normal") o["blend_mode"] = c.BlendMode;
+        if (c.CanvasBlur > 0) o["canvas_blur"] = c.CanvasBlur;
+        if (!string.IsNullOrEmpty(c.CanvasColor)) o["canvas_color"] = c.CanvasColor;
+        if (c.CornerRadius > 0) o["corner_radius"] = c.CornerRadius;
+        if (c.CropLeft > 0 || c.CropRight > 0 || c.CropTop > 0 || c.CropBottom > 0)
+            o["crop"] = new JsonArray(c.CropLeft, c.CropRight, c.CropTop, c.CropBottom);
+        if (c.AudioPan != 0) o["audio_pan"] = c.AudioPan;
+        if (c.NoiseReduction) o["noise_reduction"] = true;
+        if (c.VocalIsolation != "none") o["vocal_isolation"] = c.VocalIsolation;
+        if (c.Brightness != 0 || c.Contrast != 0 || c.Saturation != 0 || c.Temperature != 0 || c.Hue != 0 ||
+            c.Sharpen != 0 || c.Highlights != 0 || c.Shadows != 0 || c.Vignette != 0 || c.ColorFade != 0)
+        {
+            o["adjust"] = new JsonObject
+            {
+                ["brightness"] = c.Brightness, ["contrast"] = c.Contrast, ["saturation"] = c.Saturation,
+                ["temperature"] = c.Temperature, ["hue"] = c.Hue, ["sharpen"] = c.Sharpen,
+                ["highlights"] = c.Highlights, ["shadows"] = c.Shadows, ["vignette"] = c.Vignette, ["fade"] = c.ColorFade,
+            };
+        }
+        if (c.Keyframes.Count > 0)
+        {
+            var kfs = new JsonArray();
+            foreach (var k in c.Keyframes)
+            {
+                var ko = new JsonObject { ["t"] = T.Sec(k.TimeUs) };
+                if (k.Scale is { } ks) ko["scale"] = ks;
+                if (k.X is { } kx) ko["x"] = kx;
+                if (k.Y is { } ky) ko["y"] = ky;
+                if (k.Rotation is { } kr) ko["rot"] = kr;
+                if (k.Opacity is { } kp) ko["opacity"] = kp;
+                kfs.Add(ko);
+            }
+            o["keyframes"] = kfs;
+        }
+        if (c.Extra.ContainsKey("freeze")) o["freeze"] = true;
         if (c.AudioFadeIn > 0) o["fade_in"] = T.Sec(c.AudioFadeIn);
         if (c.AudioFadeOut > 0) o["fade_out"] = T.Sec(c.AudioFadeOut);
         if (c.Transition != null) { o["transition"] = c.Transition; o["transition_dur"] = T.Sec(c.TransitionDur); }
@@ -227,6 +272,7 @@ public sealed class TimelineProject : EditorProject
         if (c.VideoFadeOut > 0) fx.Add("anim-out:Fade Out");
         if (c.AudioFadeIn > 0 || c.AudioFadeOut > 0) fx.Add($"fade:{T.Sec(c.AudioFadeIn)}/{T.Sec(c.AudioFadeOut)}");
         if (c.Motion != null) fx.Add($"motion:{c.Motion}");
+        if (c.Keyframes.Count > 0) fx.Add("keyframes");
         if (fx.Count > 0) o["fx"] = fx;
         return o;
     }
@@ -268,6 +314,14 @@ public sealed class TimelineProject : EditorProject
                     c.AudioFadeOut = T.Us(a.D("fade_out", 0));
                 }
                 return "ok";
+            case "set_adjustments": return SetAdjustments(a);
+            case "duplicate_segment": return DuplicateSegment(a.Req("id"));
+            case "reverse_segment": return ReverseSegment(a.Req("id"), a.B("reversed"));
+            case "freeze_frame": return FreezeFrame(a.Req("id"), a.ReqD("at"), a.D("duration", 3.0));
+            case "extract_audio": return ExtractAudio(a.Req("id"));
+            case "replace_media": return ReplaceMedia(a.Req("id"), a.Req("path"));
+            case "set_keyframes": return SetKeyframes(a);
+            case "import_srt": return ImportSrt(a);
             default: throw new EditException($"'{tool}' is not supported for {editor.Display}");
         }
     }
@@ -411,14 +465,209 @@ public sealed class TimelineProject : EditorProject
             c.Speed = sp;
         }
         if (ch.B("visible") is { } vis) c.Opacity = vis ? Math.Max(c.Opacity, 1) : 0;
+        if (ch.B("reverse") is { } rev) c.Reverse = rev;
+        if (ch.B("keep_pitch") is { } kp) c.KeepPitch = kp;
+        if (ch.S("blend_mode") is { } bm) c.BlendMode = bm;
+        if (ch.D("canvas_blur") is { } cb) c.CanvasBlur = Math.Clamp(cb, 0, 1);
+        if (ch.S("canvas_color") is { } cc) c.CanvasColor = cc == "" ? null : Colors.Hex(cc);
+        if (ch.D("crop_left") is { } cl) c.CropLeft = Math.Clamp(cl, 0, 0.9);
+        if (ch.D("crop_right") is { } cr) c.CropRight = Math.Clamp(cr, 0, 0.9);
+        if (ch.D("crop_top") is { } ct) c.CropTop = Math.Clamp(ct, 0, 0.9);
+        if (ch.D("crop_bottom") is { } cbo) c.CropBottom = Math.Clamp(cbo, 0, 0.9);
+        if (ch.D("corner_radius") is { } crd) c.CornerRadius = Math.Clamp(crd, 0, 1);
+        if (ch.D("audio_pan") is { } ap) c.AudioPan = Math.Clamp(ap, -1, 1);
+        if (ch.B("noise_reduction") is { } nr) c.NoiseReduction = nr;
+        if (ch.S("vocal_isolation") is { } vi) c.VocalIsolation = vi;
         if (ch.S("text") is { } txt) c.Text = txt;
         if (ch.D("font_size") is { } fs) c.FontSize = fs;
         if (ch.S("color") is { } col) c.Color = Colors.Hex(col);
         if (ch.B("bold") is { } bo) c.Bold = bo;
+        if (ch.B("italic") is { } it) c.Italic = it;
+        if (ch.S("align") is { } al) c.Align = al;
+        if (ch.S("font") is { } fnt) c.Font = fnt == "" ? null : fnt;
+        if (ch.S("stroke_color") is { } sc2) c.StrokeColor = sc2 == "" ? null : Colors.Hex(sc2);
+        if (ch.D("stroke_width") is { } sw) c.StrokeWidth = sw;
+        if (ch.S("background_color") is { } bg2) c.BackgroundColor = bg2 == "" ? null : Colors.Hex(bg2);
+        if (ch.D("background_alpha") is { } bga) c.BackgroundAlpha = Math.Clamp(bga, 0, 1);
+        if (ch.B("shadow") is { } sh) c.Shadow = sh;
+        if (ch.D("letter_spacing") is { } ls) c.LetterSpacing = ls;
+        if (ch.D("line_spacing") is { } lns) c.LineSpacing = lns;
         if (IsMain(t) && c.End != oldEnd && ch.D("start") is null)
             foreach (var o in t.Clips.Where(o => o != c && o.Start >= oldEnd)) o.Start += c.End - oldEnd;
         Sort(t);
         return Describe(c);
+    }
+
+    JsonNode SetAdjustments(Args a)
+    {
+        bool reset = a.B("reset", false);
+        var res = new JsonArray();
+        foreach (var id in IdsOrAllMain(a))
+        {
+            var c = Find(id).clip;
+            if (reset)
+            {
+                c.Brightness = c.Contrast = c.Saturation = c.Temperature = c.Hue = 0;
+                c.Sharpen = c.Highlights = c.Shadows = c.Vignette = c.ColorFade = 0;
+            }
+            if (a.D("brightness") is { } br) c.Brightness = Math.Clamp(br, -1, 1);
+            if (a.D("contrast") is { } co) c.Contrast = Math.Clamp(co, -1, 1);
+            if (a.D("saturation") is { } sa) c.Saturation = Math.Clamp(sa, -1, 1);
+            if (a.D("temperature") is { } te) c.Temperature = Math.Clamp(te, -1, 1);
+            if (a.D("hue") is { } hu) c.Hue = Math.Clamp(hu, -180, 180);
+            if (a.D("sharpen") is { } sh) c.Sharpen = Math.Clamp(sh, 0, 1);
+            if (a.D("highlights") is { } hi) c.Highlights = Math.Clamp(hi, -1, 1);
+            if (a.D("shadows") is { } sw) c.Shadows = Math.Clamp(sw, -1, 1);
+            if (a.D("vignette") is { } vi) c.Vignette = Math.Clamp(vi, 0, 1);
+            if (a.D("fade") is { } fa) c.ColorFade = Math.Clamp(fa, 0, 1);
+            res.Add(Describe(c));
+        }
+        return res;
+    }
+
+    JsonNode DuplicateSegment(string id)
+    {
+        var (t, c, idx) = Find(id);
+        var copy = JsonSerializer.Deserialize<TClip>(JsonSerializer.Serialize(c))!;
+        copy.Id = Ids.Short();
+        copy.Start = c.End;
+        copy.Transition = null;
+        if (IsMain(t))
+        {
+            foreach (var o in t.Clips.Where(o => o.Start >= c.End)) o.Start += copy.Dur;
+            t.Clips.Insert(idx + 1, copy);
+        }
+        else
+        {
+            var dest = FreeAt(t, copy.Start, copy.Dur) ? t : PickTrack(t.Type, copy.Start, copy.Dur);
+            dest.Clips.Add(copy);
+            Sort(dest);
+        }
+        return Describe(copy);
+    }
+
+    JsonNode ReverseSegment(string id, bool? reversed)
+    {
+        var c = Find(id).clip;
+        c.Reverse = reversed ?? !c.Reverse;
+        return Describe(c);
+    }
+
+    JsonNode FreezeFrame(string id, double atSec, double durSec)
+    {
+        var (t, c, idx) = Find(id);
+        if (durSec <= 0) throw new EditException("Freeze duration must be > 0");
+        long atUs = T.Us(atSec), holdUs = T.Us(durSec);
+        long insertAt;
+        int insertIdx;
+        if (atUs > c.Start + 10_000 && atUs < c.End - 10_000)
+        {
+            Split(c.Id, atSec);
+            (_, c, idx) = Find(c.Id);
+            insertAt = c.End;
+            insertIdx = idx + 1;
+        }
+        else
+        {
+            insertAt = c.End;
+            insertIdx = idx + 1;
+        }
+        var hold = JsonSerializer.Deserialize<TClip>(JsonSerializer.Serialize(c))!;
+        hold.Id = Ids.Short();
+        hold.Start = insertAt;
+        hold.Dur = holdUs;
+        hold.Speed = 1;
+        hold.Transition = null;
+        hold.Extra["freeze"] = "true";
+        if (IsMain(t))
+        {
+            foreach (var o in t.Clips.Where(o => o.Start >= insertAt)) o.Start += holdUs;
+            t.Clips.Insert(insertIdx, hold);
+        }
+        else
+        {
+            var dest = FreeAt(t, hold.Start, hold.Dur) ? t : PickTrack(t.Type, hold.Start, hold.Dur);
+            dest.Clips.Add(hold);
+            Sort(dest);
+        }
+        return Describe(hold);
+    }
+
+    JsonNode ExtractAudio(string id)
+    {
+        var (_, c, _) = Find(id);
+        if (c.Kind != "video" || string.IsNullOrEmpty(c.Path))
+            throw new EditException("Extract audio requires a video clip");
+        var tr = PickTrack("audio", c.Start, c.Dur);
+        var aud = new TClip
+        {
+            Kind = "audio", Path = c.Path, Start = c.Start, Dur = c.Dur, In = c.In,
+            SourceDur = c.SourceDur, HasAudio = true, Speed = c.Speed,
+            Volume = c.Volume > 0 ? c.Volume : 1,
+            AudioFadeIn = c.AudioFadeIn, AudioFadeOut = c.AudioFadeOut,
+        };
+        tr.Clips.Add(aud);
+        Sort(tr);
+        c.Volume = 0;
+        return new JsonObject { ["video"] = Describe(c), ["audio"] = Describe(aud) };
+    }
+
+    JsonNode ReplaceMedia(string id, string rawPath)
+    {
+        var (_, c, _) = Find(id);
+        var path = Paths.Expand(rawPath);
+        var pr = Media.Probe(path);
+        c.Path = Path.GetFullPath(path);
+        c.Kind = pr.Kind == MediaKind.Photo ? "photo" : pr.Kind == MediaKind.Audio ? "audio" : "video";
+        c.SourceDur = pr.Kind == MediaKind.Photo ? 0 : pr.DurationUs;
+        c.MediaWidth = pr.Width;
+        c.MediaHeight = pr.Height;
+        c.HasAudio = pr.HasAudio;
+        c.In = 0;
+        if (c.SourceDur > 0 && c.Dur > (long)(c.SourceDur / c.Speed))
+            c.Dur = Math.Max(100_000, (long)(c.SourceDur / c.Speed));
+        return Describe(c);
+    }
+
+    JsonNode SetKeyframes(Args a)
+    {
+        var c = Find(a.Req("id")).clip;
+        var action = a.Req("action").ToLowerInvariant();
+        if (action == "clear") { c.Keyframes.Clear(); return Describe(c); }
+        long rel = Math.Clamp(T.Us(a.D("at", T.Sec(c.Start))) - c.Start, 0, c.Dur);
+        var kf = c.Keyframes.FirstOrDefault(k => Math.Abs(k.TimeUs - rel) < 20_000);
+        if (kf == null) { kf = new TKeyframe { TimeUs = rel }; c.Keyframes.Add(kf); }
+        kf.Scale = a.D("scale") ?? c.Scale;
+        kf.X = a.D("x") ?? c.X;
+        kf.Y = a.D("y") ?? c.Y;
+        kf.Rotation = a.D("rotation") ?? c.Rotation;
+        kf.Opacity = a.D("opacity") ?? c.Opacity;
+        c.Keyframes.Sort((x, y) => x.TimeUs.CompareTo(y.TimeUs));
+        return Describe(c);
+    }
+
+    JsonNode ImportSrt(Args a)
+    {
+        var raw = a.S("srt_text") is { Length: > 0 } st ? st
+            : a.S("path") is { Length: > 0 } p ? File.ReadAllText(Paths.Expand(p))
+            : throw new EditException("Provide 'srt_text' or 'path'");
+        var cues = Srt.Parse(raw);
+        if (cues.Count == 0) throw new EditException("No valid SRT subtitle cues found");
+        var res = new JsonArray();
+        var tr = PickTrack("text", cues[0].StartUs, cues[^1].StartUs + cues[^1].DurUs - cues[0].StartUs);
+        foreach (var (sUs, dUs, txt) in cues)
+        {
+            var c = new TClip
+            {
+                Kind = "text", Text = txt, Start = sUs, Dur = dUs,
+                FontSize = a.D("font_size", 9), Color = Colors.Hex(a.S("color", "#FFFFFF")),
+                Y = a.D("y", -0.75), StrokeColor = Colors.Hex(a.S("stroke_color", "#000000")),
+            };
+            tr.Clips.Add(c);
+            res.Add(Describe(c));
+        }
+        Sort(tr);
+        return res;
     }
 
     JsonNode Move(string id, double? start, string? toTrack)

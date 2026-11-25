@@ -77,11 +77,57 @@ public sealed class TClip
     public string? StrokeColor { get; set; }
     public string? BackgroundColor { get; set; }
     public string Align { get; set; } = "center";
+    public double StrokeWidth { get; set; } = 0.08;
+    public double BackgroundAlpha { get; set; } = 0.6;
+    public bool Shadow { get; set; }
+    public double LetterSpacing { get; set; }
+    public double LineSpacing { get; set; } = 0.02;
+
+    // video / canvas / crop / speed
+    public bool Reverse { get; set; }
+    public bool KeepPitch { get; set; }
+    public string BlendMode { get; set; } = "normal";
+    public double CanvasBlur { get; set; }
+    public string? CanvasColor { get; set; }
+    public double CropLeft { get; set; }
+    public double CropRight { get; set; }
+    public double CropTop { get; set; }
+    public double CropBottom { get; set; }
+    public double CornerRadius { get; set; }
+
+    // color adjustments (-1..1 normalized or degrees for Hue)
+    public double Brightness { get; set; }
+    public double Contrast { get; set; }
+    public double Saturation { get; set; }
+    public double Temperature { get; set; }
+    public double Hue { get; set; }
+    public double Sharpen { get; set; }
+    public double Highlights { get; set; }
+    public double Shadows { get; set; }
+    public double Vignette { get; set; }
+    public double ColorFade { get; set; }
+
+    // audio processing
+    public double AudioPan { get; set; }
+    public bool NoiseReduction { get; set; }
+    public string VocalIsolation { get; set; } = "none"; // none | keep_vocals | remove_vocals
+
+    public List<TKeyframe> Keyframes { get; set; } = [];
 
     public Dictionary<string, string> Extra { get; set; } = [];
 
     [JsonIgnore] public long End => Start + Dur;
     [JsonIgnore] public string FileName => string.IsNullOrEmpty(Path) ? "" : System.IO.Path.GetFileName(Path);
+}
+
+public sealed class TKeyframe
+{
+    public long TimeUs { get; set; }
+    public double? Scale { get; set; }
+    public double? X { get; set; }
+    public double? Y { get; set; }
+    public double? Rotation { get; set; }
+    public double? Opacity { get; set; }
 }
 
 /// <summary>Transitions every target editor understands.</summary>

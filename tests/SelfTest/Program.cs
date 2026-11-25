@@ -64,6 +64,16 @@ foreach (var ed in Editors.All.Where(e => e.Id != "capcut"))
         p.Run("set_animations", A($$"""{"ids":["{{first}}"],"kind":"in","name":"Fade In","duration":0.5}"""));
         p.Run("edit_segments", A($$"""{"ids":["{{first}}"],"duration":3,"x":0.1,"scale":1.1}"""));
         p.Run("split_segment", A($$"""{"id":"{{first}}","at":1.0}"""));
+        p.Run("set_adjustments", A($$"""{"ids":["{{first}}"],"contrast":0.2,"saturation":0.15,"vignette":0.25}"""));
+        p.Run("reverse_segment", A($$"""{"id":"{{first}}","reversed":true}"""));
+        p.Run("set_keyframes", A($$"""{"id":"{{first}}","action":"add","at":0.5,"scale":1.25}"""));
+        p.Run("duplicate_segment", A($$"""{"id":"{{first}}"}"""));
+        p.Run("freeze_frame", A($$"""{"id":"{{first}}","at":0.5,"duration":1.5}"""));
+        p.Run("replace_media", A($$"""{"id":"{{first}}","path":"{{Esc(Path.Combine(gen, "photo1.bmp"))}}"}"""));
+        p.Run("import_srt", A("""{"srt_text":"1\n00:00:04,000 --> 00:00:05,500\nSubtitle cue\n"}"""));
+        var postCapCut = p.Overview()["tracks"]!.AsArray().SelectMany(tr => tr!["segments"]!.AsArray()).First(s => s!["id"]!.ToString() == first)!;
+        Check(postCapCut["adjust"] != null && (bool)postCapCut["reverse"]! && postCapCut["keyframes"]!.AsArray().Count == 1,
+            "CapCut-style adjustments, reverse, keyframes, duplicate, freeze, replace, and SRT import work");
         p.Snapshot("test");
         p.Save();
         var before = p.Overview()["tracks"]!.AsArray().Sum(t => t!["segments"]!.AsArray().Count);
