@@ -48,6 +48,7 @@ let toolMode = 'select'; // select | blade
 let rippleDelete = true;
 let snapEnabled = true;
 let pxPerSec = 36;
+let needsTimelineFit = false;
 let playheadSec = 0;
 let playing = false;
 let rafId = 0;
@@ -71,6 +72,24 @@ function esc(s) {
 }
 function showModal(id) { $(id).style.display = 'flex'; }
 function hideModal(id) { $(id).style.display = 'none'; }
+
+const SVG = {
+  eye: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>',
+  eyeOff: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
+  lock: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  unlock: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.4-2"/></svg>',
+  vol: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>',
+  mute: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>',
+  cover: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 8v8M8 12h8"/></svg>',
+  sparkle: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/></svg>',
+  palette: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2a10 10 0 0 0 0 20c1.4 0 2-.7 2-1.8 0-.5-.2-1-.5-1.3-.3-.3-.5-.8-.5-1.4 0-1.1.9-2 2-2h2.3A4.7 4.7 0 0 0 22 10.8C22 5.9 17.5 2 12 2z"/></svg>',
+  sliders: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>',
+  mic: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/></svg>',
+  trans: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="4 6 11 12 4 18 4 6"/><polygon points="20 6 13 12 20 18 20 6"/></svg>',
+  motion: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>',
+  refresh: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
+  check: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>',
+};
 
 let toastTimer = null;
 function toast(msg) {
@@ -217,6 +236,10 @@ function applyOverview(ov) {
   updateAutoSaveStamp();
   renderBin();
   renderTimeline();
+  if (needsTimelineFit && overview) {
+    needsTimelineFit = false;
+    requestAnimationFrame(() => fitTimeline());
+  }
   renderStage();
   renderInspector();
 }
@@ -345,6 +368,7 @@ function renderBin() {
       <button class="subnav-btn" onclick="importMediaFolder()"><span>Folder</span><span>+</span></button>
       <div class="subnav-label">Library</div>
       ${subItems.map(s => `<button class="subnav-btn ${binFilter === s.id ? 'active' : ''}" onclick="setBinFilter('${s.id}')"><span>${s.label}</span></button>`).join('')}
+      <button class="subnav-btn ${binTab === 'projects' ? 'active' : ''}" onclick="setBinTab('projects')"><span>Projects</span></button>
       <div class="subnav-label">Generate</div>
       <button class="subnav-btn" onclick="openEditPilot()"><span>EditPilot</span><span class="ai-mini">AI</span></button>
     </div>`;
@@ -492,7 +516,7 @@ function renderCaptionsBin(body) {
           <div class="cname">Dark Pill</div><div class="cdesc">White text on dark box</div>
         </button>
         <button class="cat-card" onclick="openEditPilot(); quickPrompt('Add timed captions in the style of clean subtitles at the bottom of the video')">
-          <div class="cname">✦ AI Captions</div><div class="cdesc">Generate via EditPilot</div>
+          <div class="cname">AI Captions</div><div class="cdesc">Generate via EditPilot</div>
         </button>
       </div>
     </div>`;
@@ -596,7 +620,7 @@ async function applyCatalogItem(cat, name) {
 
 function renderProjectsBin(body) {
   const edOpts = (appState?.editors || []).map(e =>
-    `<option value="${e.id}" ${e.id === appState.editor ? 'selected' : ''}>${esc(e.display)}${e.installed ? ' ✓' : ''}${e.exportOnly ? ' (Import)' : ''}</option>`).join('');
+    `<option value="${e.id}" ${e.id === appState.editor ? 'selected' : ''}>${esc(e.display)}${e.installed ? ' (Installed)' : ''}${e.exportOnly ? ' (Import)' : ''}</option>`).join('');
   const ed = edInfo();
   const hint = ed ? (DIRECT_EDITORS.includes(ed.id) ? `Direct editing of ${ed.display} project files.` : `Writes import files (${ed.hint}).`) : '';
   const listHtml = (window._projectList || []).map((p, idx) =>
@@ -613,7 +637,7 @@ function renderProjectsBin(body) {
       <div style="display:flex;gap:6px">
         <button class="cyan" style="flex:1" onclick="showNewProject()">+ New</button>
         <button style="flex:1" onclick="openFile()">Open File</button>
-        <button onclick="loadProjects()" title="Refresh project list">↻</button>
+        <button onclick="loadProjects()" title="Refresh project list">${SVG.refresh}</button>
       </div>
       <div class="plist">${listHtml}</div>
     </div>`;
@@ -848,30 +872,44 @@ function renderStage() {
       const targetTime = clip.reverse
         ? Math.max(0, (clip.source_in || 0) + (clip.dur * (clip.speed || 1)) - elapsed)
         : Math.max(0, (clip.source_in || 0) + elapsed);
+      const posterImg = document.createElement('img');
+      posterImg.src = thumbUrl(clip.path, 960);
+      posterImg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;';
+      layer.appendChild(posterImg);
+
       let vid = activeVideos.get(clip.id);
       if (!vid || vid.dataset.path !== clip.path) {
         vid = document.createElement('video');
         vid.dataset.path = clip.path;
-        vid.poster = thumbUrl(clip.path, 960);
         vid.src = mediaUrl(clip.path);
         vid.playsInline = true;
         vid.preload = 'auto';
         vid._targetTime = targetTime;
+        vid._decodeFailed = false;
         vid.addEventListener('loadedmetadata', () => {
           try { vid.currentTime = Math.max(0.01, vid._targetTime || 0.01); } catch { }
         }, { once: true });
+        vid.addEventListener('loadeddata', () => {
+          if (vid.videoWidth > 0) posterImg.style.display = 'none';
+        });
+        vid.addEventListener('error', () => {
+          vid._decodeFailed = true;
+          vid.style.display = 'none';
+          posterImg.style.display = '';
+        });
         activeVideos.set(clip.id, vid);
       }
+      if (vid.readyState >= 2 && vid.videoWidth > 0 && !vid._decodeFailed) posterImg.style.display = 'none';
       vid._targetTime = targetTime;
       vid.muted = !!track.muted || (clip.volume === 0);
       vid.volume = Math.min(1, Math.max(0, clip.volume ?? 1));
       vid.playbackRate = clip.speed || 1;
-      if (vid.readyState >= 1 && Math.abs((vid.currentTime || 0) - targetTime) > (playing ? 0.25 : 0.04)) {
+      if (!vid._decodeFailed && vid.readyState >= 1 && Math.abs((vid.currentTime || 0) - targetTime) > (playing ? 0.25 : 0.04)) {
         try { vid.currentTime = targetTime; } catch { }
       }
-      if (playing && !clip.reverse && vid.paused) vid.play().catch(() => {});
+      if (!vid._decodeFailed && playing && !clip.reverse && vid.paused) vid.play().catch(() => {});
       else if ((!playing || clip.reverse) && !vid.paused) vid.pause();
-      layer.appendChild(vid);
+      if (!vid._decodeFailed) layer.appendChild(vid);
     }
     vp.appendChild(layer);
   }
@@ -1073,36 +1111,54 @@ function renderProjectInspector() {
         <span>Smart suggestions</span>
         <span class="ai-mini">AI</span>
       </div>
-      <div class="smart-sub">Analyze pacing, transitions, framing, audio levels, and captions with EditPilot.</div>
-      <div><button class="cyan" onclick="analyzeWithAI()">✦ Analyze</button></div>
+      <div class="smart-sub">Find out how your video can be improved with EditPilot.</div>
+      <div><button class="cyan" onclick="analyzeWithAI()">${SVG.sparkle} Analyze</button></div>
     </div>
     <div class="section-title">Global edits</div>
     <div class="global-list">
-      <div class="global-row" onclick="runTool('set_transitions', { all_main: true, name: 'Cross Dissolve', duration: 0.6 }, 'Cross Dissolve all')">
-        <div class="global-row-left"><span>✦</span><span>Add Cross Dissolve transitions</span></div>
+      <div class="global-row" onclick="runTool('set_adjustments', { all_main: true, contrast: 0.14, saturation: 0.12, sharpen: 0.15, vignette: 0.15 }, 'Make colors better')">
+        <div class="global-row-left">${SVG.palette}<span>Make colors better</span></div>
         <span style="color:var(--accent);font-size:11px">Apply</span>
       </div>
-      <div class="global-row" onclick="runTool('add_motion', { all_main_photos: true, preset: 'alternate', strength: 0.15 }, 'Ken Burns motion')">
-        <div class="global-row-left"><span>⤢</span><span>Add Ken Burns motion to photos</span></div>
+      <div class="global-row" onclick="runTool('set_adjustments', { all_main: true, contrast: 0.08, saturation: 0.05, brightness: 0.02, temperature: 0 }, 'Make colors consistent')">
+        <div class="global-row-left">${SVG.sliders}<span>Make colors consistent</span></div>
+        <span style="color:var(--accent);font-size:11px">Apply</span>
+      </div>
+      <div class="global-row" onclick="makeVolumeConsistent()">
+        <div class="global-row-left">${SVG.vol}<span>Make volume consistent</span></div>
+        <span style="color:var(--accent);font-size:11px">Apply</span>
+      </div>
+      <div class="global-row" onclick="makeVoiceClearer()">
+        <div class="global-row-left">${SVG.mic}<span>Make voice clearer</span></div>
+        <span style="color:var(--accent);font-size:11px">Apply</span>
+      </div>
+      <div class="global-row" onclick="runTool('set_transitions', { all_main: true, name: 'Cross Dissolve', duration: 0.6 }, 'Add smooth transitions')">
+        <div class="global-row-left">${SVG.trans}<span>Add smooth transitions</span></div>
+        <span style="color:var(--accent);font-size:11px">Apply</span>
+      </div>
+      <div class="global-row" onclick="runTool('add_motion', { all_main_photos: true, preset: 'alternate', strength: 0.15 }, 'Add Ken Burns motion')">
+        <div class="global-row-left">${SVG.motion}<span>Add Ken Burns motion</span></div>
         <span style="color:var(--accent);font-size:11px">Apply</span>
       </div>
       <div class="global-row" onclick="toggleMainMute()">
-        <div class="global-row-left"><span>🔇</span><span>Mute original video audio</span></div>
-        <span class="toggle-box ${mainMuted ? 'on' : ''}">${mainMuted ? '✓' : ''}</span>
-      </div>
-      <div class="global-row" onclick="closeMainGaps()">
-        <div class="global-row-left"><span>⇥</span><span>Close main-track gaps</span></div>
-        <span style="color:var(--accent);font-size:11px">Run</span>
-      </div>
-      <div class="global-row" onclick="runTool('set_adjustments', { all_main: true, contrast: 0.15, saturation: 0.12, vignette: 0.2 }, 'Auto Enhance Color')">
-        <div class="global-row-left"><span>🎨</span><span>Auto-enhance colors</span></div>
-        <span style="color:var(--accent);font-size:11px">Apply</span>
-      </div>
-      <div class="global-row" onclick="runTool('set_transitions', { all_main: true, name: 'none' }, 'Clear transitions')">
-        <div class="global-row-left"><span>✕</span><span>Remove all transitions</span></div>
-        <span style="color:var(--text-muted);font-size:11px">Clear</span>
+        <div class="global-row-left">${SVG.mute}<span>Mute original video audio</span></div>
+        <span class="toggle-box ${mainMuted ? 'on' : ''}">${mainMuted ? SVG.check : ''}</span>
       </div>
     </div>`;
+}
+
+async function makeVolumeConsistent() {
+  const mainTrack = overview?.tracks?.find(t => t.is_main);
+  const ids = (mainTrack?.segments || []).filter(s => s.kind === 'video').map(s => s.id);
+  if (!ids.length) { toast('No video clips on main track'); return; }
+  await runTool('edit_segments', { ids, volume: 1 }, 'Make volume consistent');
+}
+
+async function makeVoiceClearer() {
+  const mainTrack = overview?.tracks?.find(t => t.is_main);
+  const ids = (mainTrack?.segments || []).filter(s => s.kind === 'video').map(s => s.id);
+  if (!ids.length) { toast('No video clips on main track'); return; }
+  await runTool('edit_segments', { ids, noise_reduction: true, vocal_isolation: 'keep_vocals' }, 'Make voice clearer');
 }
 
 async function toggleMainMute() {
@@ -1251,7 +1307,7 @@ function renderBasicTab(clip) {
     <div class="prop-group">
       <div class="prop-group-title">Keyframes (${clip.keyframes?.length || 0})</div>
       <div style="display:flex;gap:6px">
-        <button class="cyan" style="flex:1" onclick="addKeyframeAtPlayhead('${clip.id}')">◆ Add Keyframe</button>
+        <button class="cyan" style="flex:1" onclick="addKeyframeAtPlayhead('${clip.id}')">+ Keyframe</button>
         <button onclick="runTool('set_keyframes', { id: '${clip.id}', action: 'clear' }, 'Clear keyframes')">Clear</button>
       </div>
     </div>`;
@@ -1268,11 +1324,11 @@ function renderSpeedTab(clip) {
       </div>
       <div class="global-row" onclick="editClipProp('${clip.id}', { keep_pitch: ${!clip.keep_pitch} })">
         <div class="global-row-left"><span>Keep Voice Pitch</span></div>
-        <span class="toggle-box ${clip.keep_pitch ? 'on' : ''}">${clip.keep_pitch ? '✓' : ''}</span>
+        <span class="toggle-box ${clip.keep_pitch ? 'on' : ''}">${clip.keep_pitch ? SVG.check : ''}</span>
       </div>
       <div class="global-row" onclick="runTool('reverse_segment', { id: '${clip.id}', reversed: ${!clip.reverse} }, 'Reverse clip')">
-        <div class="global-row-left"><span>⇄ Reverse Clip</span></div>
-        <span class="toggle-box ${clip.reverse ? 'on' : ''}">${clip.reverse ? '✓' : ''}</span>
+        <div class="global-row-left"><span>Reverse Clip</span></div>
+        <span class="toggle-box ${clip.reverse ? 'on' : ''}">${clip.reverse ? SVG.check : ''}</span>
       </div>
     </div>`;
 }
@@ -1369,7 +1425,7 @@ function renderAudioTab(clip) {
       <div class="prop-group-title">Enhancement &amp; Tools</div>
       <div class="global-row" onclick="editClipProp('${clip.id}', { noise_reduction: ${!clip.noise_reduction} })">
         <div class="global-row-left"><span>Noise Reduction</span></div>
-        <span class="toggle-box ${clip.noise_reduction ? 'on' : ''}">${clip.noise_reduction ? '✓' : ''}</span>
+        <span class="toggle-box ${clip.noise_reduction ? 'on' : ''}">${clip.noise_reduction ? SVG.check : ''}</span>
       </div>
       <div class="prop-field">
         <label>Vocal Isolation</label>
@@ -1470,12 +1526,21 @@ function setToolMode(m) {
 }
 function toggleRipple() { rippleDelete = !rippleDelete; $('btnRipple').classList.toggle('active', rippleDelete); }
 function toggleSnap() { snapEnabled = !snapEnabled; $('btnSnap').classList.toggle('active', snapEnabled); }
-function setZoom(v) { pxPerSec = Math.max(4, Math.min(240, v)); $('zoomSlider').value = String(pxPerSec); renderTimeline(); }
+const MIN_ZOOM = 0.2, MAX_ZOOM = 240, ZOOM_RATIO = MAX_ZOOM / MIN_ZOOM;
+function setZoomFromSlider(val) {
+  setZoom(MIN_ZOOM * Math.pow(ZOOM_RATIO, Math.max(0, Math.min(100, val)) / 100));
+}
+function setZoom(v) {
+  pxPerSec = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, v));
+  const sliderVal = Math.round(100 * Math.log(pxPerSec / MIN_ZOOM) / Math.log(ZOOM_RATIO));
+  if ($('zoomSlider')) $('zoomSlider').value = String(Math.max(0, Math.min(100, sliderVal)));
+  renderTimeline();
+}
 function zoomTimeline(dir) { setZoom(dir > 0 ? pxPerSec * 1.28 : pxPerSec / 1.28); }
 function fitTimeline() {
-  const dur = Math.max(projectDuration(), 5);
+  const dur = Math.max(projectDuration(), 10);
   const avail = Math.max(300, $('tlScroll').clientWidth - 40);
-  setZoom(Math.max(4, Math.min(240, avail / dur)));
+  setZoom(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, avail / dur)));
   $('tlScroll').scrollLeft = 0;
 }
 
@@ -1492,7 +1557,7 @@ function renderTimeline() {
 
   if (!overview) {
     hdrList.innerHTML = ''; ruler.innerHTML = '';
-    lanes.innerHTML = '<div style="padding:28px;color:var(--text-muted);text-align:center">No project loaded. Open a project from the Projects tab or Menu.</div>';
+    lanes.innerHTML = '<div style="padding:28px;color:var(--text-muted);text-align:center">No project loaded. Open a project from the Projects view or Menu.</div>';
     updatePlayheadDom();
     return;
   }
@@ -1502,7 +1567,8 @@ function renderTimeline() {
   const widthPx = Math.max(scrollEl.clientWidth, Math.ceil(totalSec * pxPerSec));
   canvas.style.width = `${widthPx}px`;
 
-  const stepSec = pxPerSec >= 120 ? 1 : pxPerSec >= 55 ? 2 : pxPerSec >= 22 ? 5 : pxPerSec >= 10 ? 10 : 30;
+  const STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
+  const stepSec = STEPS.find(s => s * pxPerSec >= 70) || 600;
   const minorSec = stepSec / 5;
   let rHtml = '';
   for (let t = 0; t <= totalSec; t += minorSec) {
@@ -1518,6 +1584,7 @@ function renderTimeline() {
   ruler.innerHTML = rHtml;
 
   const ordered = visualTracksOrdered();
+  const hasOverlays = ordered.some(t => !t.is_main && t.type !== 'audio');
   let hHtml = '', lHtml = '';
   for (const t of ordered) {
     const h = trackHeight(t), tid = trackApiId(t), locked = lockedTracks.has(tid);
@@ -1525,17 +1592,22 @@ function renderTimeline() {
     const hasMute = t.type === 'video' || t.type === 'audio', hasEye = t.type !== 'audio';
 
     if (t.is_main) {
-      hHtml += `<div style="height:18px;border-bottom:1px solid rgba(255,255,255,0.03)"></div>`;
-      lHtml += `<div class="tl-overlay-drop" id="tlOverlayDrop">+ Drop photo / video here for overlay track</div>`;
+      const spaceH = hasOverlays ? 24 : 112;
+      hHtml += `<div style="height:${spaceH}px"></div>`;
+      lHtml += `<div class="tl-overlay-space ${hasOverlays ? 'compact' : ''}" id="tlOverlaySpace">+ Drop photo / video here for overlay track</div>`;
     }
+
+    const coverHtml = t.is_main
+      ? `<div class="tl-cover-box" onclick="setInspTab('project')" title="Cover &amp; Project settings">${SVG.cover}<span>Cover</span></div>`
+      : `<span class="tl-hdr-badge">${trackShortBadge(t)}</span>`;
 
     hHtml += `<div class="tl-track-hdr ${mainCls}" style="height:${h}px">
       <div class="tl-hdr-btns">
-        ${hasEye ? `<button class="tl-hdr-btn ${t.hidden ? 'warn' : ''}" onclick="toggleTrackHidden('${tid}', ${!t.hidden})" title="Toggle track visibility">${t.hidden ? '⊘' : '👁'}</button>` : ''}
-        <button class="tl-hdr-btn ${locked ? 'on' : ''}" onclick="toggleTrackLock('${tid}')" title="Lock track">${locked ? '🔒' : '🔓'}</button>
-        ${hasMute ? `<button class="tl-hdr-btn ${t.muted ? 'warn' : ''}" onclick="toggleTrackMute('${tid}', ${!t.muted})" title="Mute track">${t.muted ? '🔇' : '🔊'}</button>` : ''}
+        ${hasEye ? `<button class="tl-hdr-btn ${t.hidden ? 'warn' : ''}" onclick="toggleTrackHidden('${tid}', ${!t.hidden})" title="Toggle track visibility">${t.hidden ? SVG.eyeOff : SVG.eye}</button>` : ''}
+        <button class="tl-hdr-btn ${locked ? 'on' : ''}" onclick="toggleTrackLock('${tid}')" title="Lock track">${locked ? SVG.lock : SVG.unlock}</button>
+        ${hasMute ? `<button class="tl-hdr-btn ${t.muted ? 'warn' : ''}" onclick="toggleTrackMute('${tid}', ${!t.muted})" title="Mute track">${t.muted ? SVG.mute : SVG.vol}</button>` : ''}
       </div>
-      <span class="tl-hdr-badge ${t.is_main ? 'main' : ''}">${trackShortBadge(t)}</span>
+      ${coverHtml}
     </div>`;
 
     let segsHtml = '';
@@ -1546,9 +1618,9 @@ function renderTimeline() {
       const label = c.text || c.file || c.name || c.kind;
       const bodyStyle = (c.kind === 'video' || c.kind === 'photo') && c.path ? `style="background-image:url('${thumbUrl(c.path, 140)}')"` : '';
       const waveHtml = c.kind === 'audio' ? `<canvas class="tl-wave" data-path="${esc(c.path || '')}" data-id="${c.id}"></canvas>` : '';
-      const transHtml = c.transition ? `<div class="tl-trans-badge" title="Transition: ${esc(c.transition)}">⋈</div>` : '';
+      const transHtml = c.transition ? `<div class="tl-trans-badge" title="Transition: ${esc(c.transition)}">${SVG.trans}</div>` : '';
       const kfHtml = (c.keyframes || []).map(k => `<div class="tl-kf-dot" style="left:${Math.round(k.t * pxPerSec)}px" title="Keyframe ${k.t}s"></div>`).join('');
-      const badges = `${c.reverse ? '⇄' : ''}${c.freeze ? '❄' : ''}${c.adjust ? '🎨' : ''}${c.volume === 0 ? '🔇' : ''}`;
+      const badges = [c.reverse ? 'REV' : '', c.freeze ? 'FRZ' : '', c.adjust ? 'ADJ' : '', c.volume === 0 ? 'MUTE' : ''].filter(Boolean).join(' ');
 
       segsHtml += `<div class="tl-clip kind-${esc(c.kind)} ${sel}" data-id="${c.id}" data-track="${tid}" style="left:${left}px;width:${w}px">
         <div class="tl-trim left" data-trim="left"></div>
@@ -1667,7 +1739,7 @@ function nearestMainBoundary(sec, excludeId = null) {
 function clearTimelineDropIndicators() {
   $('tlDropGhost').style.display = 'none';
   $('tlInsertBar').style.display = 'none';
-  $('tlOverlayDrop')?.classList.remove('hot');
+  $('tlOverlaySpace')?.classList.remove('hot');
   document.querySelectorAll('.tl-lane.drop-target').forEach(l => l.classList.remove('drop-target'));
   currentDropPlan = null;
 }
@@ -1675,7 +1747,7 @@ function clearTimelineDropIndicators() {
 function computeTimelineDrop(clientX, clientY, items) {
   const tRaw = timeAtClientX(clientX);
   const hitEl = document.elementFromPoint(clientX, clientY);
-  const overlayDrop = hitEl?.closest('#tlOverlayDrop');
+  const overlayDrop = hitEl?.closest('#tlOverlaySpace');
   const lane = hitEl?.closest('.tl-lane');
   const isAudioOnly = items && items.length > 0 && items.every(x => x.kind === 'audio');
   const ghost = $('tlDropGhost');
@@ -1895,10 +1967,10 @@ window.addEventListener('pointermove', e => {
   if (dragState.type === 'move') {
     const rawStart = Math.max(0, dragState.origStart + dt);
     const overEl = document.elementFromPoint(e.clientX, e.clientY);
-    const overlayDrop = overEl?.closest('#tlOverlayDrop');
+    const overlayDrop = overEl?.closest('#tlOverlaySpace');
     const lane = overEl?.closest('.tl-lane');
     document.querySelectorAll('.tl-lane.drop-target').forEach(l => l.classList.remove('drop-target'));
-    $('tlOverlayDrop')?.classList.remove('hot');
+    $('tlOverlaySpace')?.classList.remove('hot');
 
     if (dragState.origIsMain && (overlayDrop || (lane && lane.dataset.type === 'video' && lane.dataset.track !== 'video#0'))) {
       dragState.targetTrack = overlayDrop ? 'video#new' : lane.dataset.track;
@@ -1972,7 +2044,7 @@ window.addEventListener('pointerup', async () => {
   dragState = null;
   $('tlSnapLine').style.display = 'none';
   $('tlInsertBar').style.display = 'none';
-  $('tlOverlayDrop')?.classList.remove('hot');
+  $('tlOverlaySpace')?.classList.remove('hot');
   document.querySelectorAll('.tl-lane.drop-target').forEach(l => l.classList.remove('drop-target'));
 
   if (ds.type === 'move') {
@@ -2201,6 +2273,7 @@ async function openProject(path) {
     catalogCache = {};
     selectSingleClip(null);
     playheadSec = 0;
+    needsTimelineFit = true;
     applyOverview(ov);
     loadProjects();
     if (binTab === 'projects') setBinTab('media');
@@ -2211,7 +2284,7 @@ async function openProject(path) {
 async function openFile() {
   try {
     const ov = await api.open_file();
-    if (ov) { localMediaPool = []; selectedBinPaths.clear(); catalogCache = {}; selectSingleClip(null); playheadSec = 0; applyOverview(ov); loadProjects(); if (binTab === 'projects') setBinTab('media'); }
+    if (ov) { localMediaPool = []; selectedBinPaths.clear(); catalogCache = {}; selectSingleClip(null); playheadSec = 0; needsTimelineFit = true; applyOverview(ov); loadProjects(); if (binTab === 'projects') setBinTab('media'); }
   } catch (e) { toast(e.message || String(e)); }
 }
 
@@ -2222,7 +2295,7 @@ async function createProject() {
   hideModal('mNew');
   try {
     const ov = await api.new_project(n, $('newRatio').value);
-    localMediaPool = []; selectedBinPaths.clear(); catalogCache = {}; selectSingleClip(null); playheadSec = 0;
+    localMediaPool = []; selectedBinPaths.clear(); catalogCache = {}; selectSingleClip(null); playheadSec = 0; needsTimelineFit = true;
     applyOverview(ov); await loadProjects();
     if (binTab === 'projects') setBinTab('media');
     toast(`Created "${ov.project}"`);
@@ -2256,7 +2329,7 @@ function pickProvider(id) {
 function showSettings() {
   if (!appState) return;
   $('provSel').innerHTML = appState.providers.map(p =>
-    `<option value="${p.id}">${esc(p.display)}${p.free ? ' - Free' : ' - Paid'}${p.hasKey ? ' ✓' : ''}</option>`).join('');
+    `<option value="${p.id}">${esc(p.display)}${p.free ? ' - Free' : ' - Paid'}${p.hasKey ? ' (Saved)' : ''}</option>`).join('');
   pickProvider(appState.provider || 'gemini');
   showModal('mSettings');
 }
@@ -2310,7 +2383,7 @@ async function handleExternalTimelineDrop(paths, dropMeta) {
 function onEvent(kind, data) {
   if (kind === 'assistant') addChat('chat-msg bot', esc(data));
   else if (kind === 'tool') {
-    const d = addChat('tool-log', `⚙ ${esc(data.name)}<pre>${esc(JSON.stringify(data.input, null, 2))}</pre>`);
+    const d = addChat('tool-log', `Tool: ${esc(data.name)}<pre>${esc(JSON.stringify(data.input, null, 2))}</pre>`);
     d.onclick = () => d.classList.toggle('open');
   }
   else if (kind === 'changed') { refreshOverview(); if (data) addChat('chat-msg sys', esc(data)); }
@@ -2328,8 +2401,8 @@ function onEvent(kind, data) {
       else probeAndAddToBin(data);
     }
   }
-  else if (kind === 'update') { updUrl = data.url; const b = $('updBtn'); b.textContent = `⬆ v${data.version} available`; b.style.display = ''; }
-  else if (kind === 'project') { currentProjectPath = data.path; localMediaPool = []; selectedBinPaths.clear(); catalogCache = {}; selectSingleClip(null); playheadSec = 0; refreshOverview(); loadProjects(); }
+  else if (kind === 'update') { updUrl = data.url; const b = $('updBtn'); b.textContent = `Update v${data.version}`; b.style.display = ''; }
+  else if (kind === 'project') { currentProjectPath = data.path; localMediaPool = []; selectedBinPaths.clear(); catalogCache = {}; selectSingleClip(null); playheadSec = 0; needsTimelineFit = true; refreshOverview(); loadProjects(); }
   else if (kind === 'done') { setBusy(false); refreshOverview(); }
 }
 
@@ -2393,6 +2466,7 @@ document.addEventListener('keydown', e => {
     await loadProjects();
     if (appState.project) {
       currentProjectPath = appState.projectPath;
+      needsTimelineFit = true;
       await refreshOverview();
     } else {
       applyOverview(null);

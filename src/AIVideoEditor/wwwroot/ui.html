@@ -97,10 +97,6 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="5" rx="1"/><rect x="13" y="10" width="8" height="11" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/></svg>
           <span>Templates</span>
         </button>
-        <button class="bin-tab" data-tab="projects" onclick="setBinTab('projects')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
-          <span>Projects</span>
-        </button>
       </div>
 
       <div class="bin-body" id="binBody"></div>
@@ -108,10 +104,10 @@
       <div class="bin-footer">
         <div class="bin-footer-left">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#00d2c8" stroke-width="2"><path d="M12 3l1.9 4.2L18 9l-4.1 1.8L12 15l-1.9-4.2L6 9l4.1-1.8L12 3z"/></svg>
-          <span>AI Clipper</span>
-          <span style="color:var(--text-muted);font-weight:400">Describe edits in natural language</span>
+          <span>AI clipper</span>
+          <span style="color:var(--text-muted);font-weight:400">Select media to get started</span>
         </div>
-        <button class="cyan" style="padding:3px 9px;font-size:11px" onclick="openEditPilot()">EditPilot</button>
+        <button class="cyan" style="padding:3px 9px;font-size:11px" onclick="openEditPilot()">Start clipping</button>
       </div>
     </section>
 
@@ -295,7 +291,7 @@
         <button class="icon-btn" onclick="zoomTimeline(-1)" title="Zoom out">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M21 21l-4.3-4.3"/></svg>
         </button>
-        <input class="tl-zoom-slider" id="zoomSlider" type="range" min="4" max="240" value="36" oninput="setZoom(Number(this.value))">
+        <input class="tl-zoom-slider" id="zoomSlider" type="range" min="0" max="100" value="60" oninput="setZoomFromSlider(Number(this.value))">
         <button class="icon-btn" onclick="zoomTimeline(1)" title="Zoom in">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M11 8v6M8 11h6M21 21l-4.3-4.3"/></svg>
         </button>

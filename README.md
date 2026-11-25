@@ -12,12 +12,10 @@ Chat with an AI that edits your video project for you: *"take all the photos fro
 
 תוכנה לווינדוס בסביבת עריכה מלאה במצב כהה (Dark Mode) עם ציר זמן אינטראקטיבי רב-ערוצי, תצוגה מקדימה חיה, ספריית מדיה, עורך מאפיינים ו-**EditPilot** — עוזר ה-AI שעורך עבורכם את הפרויקט ישירות בתוכנת העריכה.
 
-### מה חדש ב-v2.5.0 (כולל כל יכולות v2.2.0–v2.4.0)
-- **גרירה ושחרור מלאה בסגנון CapCut:**
-  - **מספריית המדיה לציר הזמן:** גרירת תמונה, סרטון, אודיו או מספר תמונות יחד (`Ctrl+Click`) ישירות על המסלול הראשי (עם קו הכנסה מגנטי ותצוגת Ghost) או אל אזור השכבה העליונה (**Overlay**).
-  - **מ-Windows Explorer ישירות לציר הזמן:** גרירת קבצים מהמחשב ישר למיקום הרצוי על המסלול הראשי, השכבה העליונה או ערוץ האודיו.
-  - **סידור מחדש בגרירה:** גרירת קליפים על המסלול הראשי מזיזה ומסדרת אותם מגנטית (כמו ב-CapCut), או מעלה אותם לשכבת Overlay.
-  - **עריכה חיה על המסך:** גרירת תמונות, סרטונים וטקסט ישירות על חלון התצוגה המקדימה ושינוי גודל עם ידיות הפינה, כולל תצוגת פריים מיידית.
+### מה חדש ב-v2.6.0 (כולל כל יכולות v2.2.0–v2.5.0)
+- **מראה ופרופורציות של CapCut Desktop:** סכימת צבעים ניטרלית כהה (`#0e0e10` / `#131316` / `#18181c`), פריסת לוחות מאוזנת (`34% / 37% / 29%`), 10 לשוניות ספרייה בשורה אחת עם גישה ל-**Projects** בתפריט הצד, אייקוני SVG מונוכרומיים נקיים ורשימת **Global edits** תואמת (*Make colors better*, *Make colors consistent*, *Make volume consistent*, *Make voice clearer*).
+- **ציר זמן ותצוגה מקדימה משודרגים:** אזור גרירה מרווח מעל המסלול הראשי ליצירת שכבות Overlay, כרטיס **Cover** ליד כותרת המסלול הראשי, סרגל זום לוגריתמי עם התאמה אוטומטית בפתיחת פרויקט, ושכבת תצוגה מקדימה מבוססת Poster שלא משאירה מסך שחור.
+- **גרירה ושחרור מלאה בסגנון CapCut (מ-v2.5.0):** גרירה מספריית המדיה או מ-Windows Explorer ישר למסלול הראשי, Overlay או Audio, סידור מגנטי בגרירה, ועריכת גודל/מיקום ישירה על ה-Canvas.
 - **כל כלי העריכה בסגנון CapCut (מ-v2.4.0):** לשוניות **Stickers, Captions (`.srt`), Adjustment, Templates**, תתי-לשוניות **Basic / Speed / Anim / Adjust / Audio / Text**, בחירה מרובה, **Freeze Frame**, **Duplicate**, **Reverse**, **Extract Audio**, **Replace Media** ו-Keyframes.
 - **מעבר אוטומטי בין שירותי AI, גרירה ושחרור והתראת עדכון (מ-v2.2.0):** גרירת קבצים ותיקיות, בחירת מודל אוטומטית, כפתור עדכון, ומעבר אוטומטי בין ספקי AI כשנגמרת המכסה.
 
@@ -75,10 +73,12 @@ Chat with an AI that edits your video project for you: *"take all the photos fro
 
 A Windows desktop video editing studio in permanent Dark Mode featuring a media bin, live preview stage, property inspector, interactive multi-track timeline, and **EditPilot** — an AI assistant that edits your project directly in your video editor.
 
-### Highlights (v2.5.0 + v2.2.0–v2.4.0)
-- **CapCut-Style Drag & Drop Everywhere:** Drag single or multi-selected (`Ctrl+Click`) photos, videos, or audio from the Media Bin—or directly from Windows Explorer—onto the magnetic Main track (with live ghost preview and insertion bar) or Overlay drop zone; drag main-track clips horizontally to magnetically reorder; and drag or resize visual layers directly inside the Preview Stage.
-- **Full CapCut-Style Editing Suite:** Asset tabs for **Media, Audio, Text, Stickers, Effects, Transitions, Captions (`.srt` import), Filters, Adjustment, Templates, and Projects**; contextual clip sub-tabs (**Basic, Speed, Anim, Adjust, Audio, Text**) with live CSS filtering, crop, blend modes, canvas blur/color, keyframes, reverse, freeze frame, duplicate, extract audio, replace media, and copy/paste attributes.
-- **AI Service Fallback & Usability:** EditPilot AI assistant with automatic fallback across saved AI providers on quota/credit limits (free tiers first), automatic model selection, drag-and-drop files/folders onto the window, and an update notice when a new GitHub release is available.
+### Highlights (v2.6.0 + v2.2.0–v2.5.0)
+- **CapCut Desktop Layout & Controls:** Neutral charcoal dark palette (`#0e0e10` / `#131316` / `#18181c`), balanced `34% / 37% / 29%` workspace proportions, single-row 10-tab asset bar with `Projects` inside the left sub-navigation, crisp monochrome SVG iconography across toolbars and track headers, and CapCut's **Global edits** (*Make colors better*, *Make colors consistent*, *Make volume consistent*, *Make voice clearer*, transitions, Ken Burns, mute).
+- **Spacious Timeline & Poster-Backed Preview:** Dedicated open overlay drop canvas above the Main track, **Cover** badge beside Main track controls, logarithmic zoom slider with automatic fit-to-view on project open and adaptive ruler ticks, plus reliable poster-backed `<video>` preview that avoids black frames while seeking or on unsupported codecs.
+- **CapCut-Style Drag & Drop Everywhere (v2.5.0):** Drag single or multi-selected (`Ctrl+Click`) photos, videos, or audio from the Media Bin—or directly from Windows Explorer—onto the magnetic Main track or Overlay drop canvas; drag main-track clips horizontally to magnetically reorder; and drag/resize layers directly inside the Preview Stage.
+- **Full CapCut-Style Editing Suite (v2.4.0):** Asset tabs for **Media, Audio, Text, Stickers, Effects, Transitions, Captions (`.srt`), Filters, Adjustment, Templates**; contextual clip sub-tabs (**Basic, Speed, Anim, Adjust, Audio, Text**) with live CSS filtering, crop, blend modes, canvas blur/color, keyframes, reverse, freeze frame, duplicate, extract audio, replace media, and copy/paste attributes.
+- **AI Service Fallback & Usability (v2.2.0):** EditPilot AI assistant with automatic fallback across saved AI providers on quota/credit limits (free tiers first), automatic model selection, drag-and-drop files/folders onto the window, and an update notice when a new GitHub release is available.
 
 ### Install
 Download `AIVideoEditor-Setup-<version>.exe` from [Releases](https://github.com/dor2500/ai-video-editor/releases/latest). It installs per user and needs no admin rights. A portable exe is also attached. On first start, pick an AI service and paste its API key. Keys are stored encrypted with Windows DPAPI. Free services: **Gemini** Flash models (the default), **Groq**, **OpenRouter** `:free` models, **Cerebras** and **Mistral** (Experiment plan). Paid: **Claude**. Free tiers have request limits, and an edit takes several model calls. When one service runs out of quota or credit, the app switches automatically to the next service you have a key for. Files and folders can be dragged into the chat, and the app shows a button when a new release is out.
