@@ -42,6 +42,8 @@ public static class ToolDefs
             P(("folder", S()), ("recursive", B())), ["folder"]),
         new("look_at_images", "See up to 8 images (thumbnails) so you can choose or order them by content.",
             P(("paths", L())), ["paths"]),
+        new("download_youtube", "Download audio (song/music) or video from a YouTube URL (or YouTube song search query) to local disk so it can be added to the project with add_audio or add_media.",
+            P(("url", S("YouTube URL (youtube.com / youtu.be) or song search query")), ("mode", S("audio (default, downloads song/music) or video", ["audio", "video"]))), ["url"]),
         new("undo_last_request", "Restore the project to how it was before the previous request.", P(), []),
     ];
 

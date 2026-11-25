@@ -75,6 +75,9 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
         - Start a request with get_project_overview (unless you just did and nothing changed).
         - When the user names a folder of photos/videos, call list_folder_media first. To pick or order photos by content,
           use look_at_images on a few candidates.
+        - When the user shares a YouTube link or asks to download a song/clip from YouTube, call download_youtube first
+          (mode="audio" for songs/music, mode="video" for video clips), then immediately add the downloaded local file path
+          to the timeline with add_audio or add_media and apply all requested edits (fit_to_video, trim, fades, volume, mute, etc.).
         - Do the whole job in as few tool calls as reasonable (tools accept lists of ids), then summarize briefly what changed.
         - If a request is ambiguous in a way that matters (which song? which folder?), ask one short question instead of guessing.
         - If something is not possible in the current editor, say so plainly and suggest the closest alternative.
@@ -189,7 +192,7 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
                 emit("tool", new { name = call.Name, input = call.Args });
                 try
                 {
-                    var (output, images, mut) = Run(call.Name, call.Args);
+                    var (output, images, mut) = await RunAsync(call.Name, call.Args, cts.Token);
                     if (mut) { Project!.Save(); changed = true; }
                     if (call.Name == "undo_last_request") changed = true;
                     results.Add(new ToolOutput { CallId = call.Id, Name = call.Name, Text = output, Images = images });
@@ -232,7 +235,7 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
                || m.Contains("thought signature", StringComparison.OrdinalIgnoreCase);
     }
 
-    (string text, List<(string, byte[])> images, bool mutated) Run(string name, JsonObject args)
+    async Task<(string text, List<(string, byte[])> images, bool mutated)> RunAsync(string name, JsonObject args, CancellationToken ct)
     {
         var a = new Args(args);
         string J(JsonNode? n) => n?.ToJsonString(Json.Relaxed) ?? "null";
@@ -263,6 +266,13 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
                 foreach (var p in a.L("paths").Take(8))
                     if (Thumb(Paths.Expand(p)) is { } jpg) imgs.Add((Path.GetFileName(p), jpg));
                 return (imgs.Count > 0 ? $"{imgs.Count} images attached" : "Could not open any of those images", imgs, false);
+            }
+            case "download_youtube":
+            {
+                var dl = await YouTubeDownloader.DownloadAsync(a.Req("url"), a.S("mode", "audio"), msg => emit("info", msg), ct);
+                var dto = dl.ToDto();
+                emit("media_downloaded", dto);
+                return (J(Json.From(dto)), [], false);
             }
         }
         if (Project == null)

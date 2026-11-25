@@ -318,20 +318,31 @@ public partial class MainWindow : Window
     }
 
     bool updateChecked;
+    ReleaseInfo? lastRelease;
+    bool installingUpdate;
 
-    /// <summary>Notifies the UI when a newer release exists on GitHub (no personal data is sent).</summary>
+    static object ReleaseDto(ReleaseInfo info) => new
+    {
+        current = info.CurrentVersion,
+        latest = info.LatestVersion,
+        hasUpdate = info.HasUpdate,
+        url = info.Url,
+        notes = info.Notes,
+        published = info.PublishedAt,
+        setupUrl = info.SetupUrl,
+        setupName = info.SetupName,
+        setupSize = info.SetupSize,
+    };
+
+    /// <summary>Notifies the UI about the latest GitHub release (no personal data is sent).</summary>
     async Task CheckForUpdate()
     {
         if (updateChecked) return;
         updateChecked = true;
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd($"AIVideoEditor/{Version}");
-            var j = JsonNode.Parse(await http.GetStringAsync("https://api.github.com/repos/dor2500/ai-video-editor/releases/latest"));
-            var tag = j?["tag_name"]?.ToString()?.TrimStart('v') ?? "";
-            if (System.Version.TryParse(tag, out var latest) && System.Version.TryParse(Version, out var mine) && latest > mine)
-                Emit("update", new { version = tag, url = j?["html_url"]?.ToString() });
+            lastRelease = await ReleaseChecker.FetchLatestAsync(Version);
+            Emit("update", ReleaseDto(lastRelease));
         }
         catch { /* offline or rate-limited: no notice */ }
     }
@@ -614,6 +625,57 @@ public partial class MainWindow : Window
                 var u = A(a, 0);
                 if (u.StartsWith("https://")) Process.Start(new ProcessStartInfo(u) { UseShellExecute = true });
                 return true;
+            }
+            case "check_update":
+            {
+                lastRelease = await ReleaseChecker.FetchLatestAsync(Version);
+                var dto = ReleaseDto(lastRelease);
+                Emit("update", dto);
+                return dto;
+            }
+            case "install_update":
+            {
+                if (installingUpdate) throw new EditException("Update download already in progress.");
+                installingUpdate = true;
+                try
+                {
+                    var url = A(a, 0);
+                    var name = A(a, 1);
+                    if (string.IsNullOrWhiteSpace(url))
+                    {
+                        lastRelease ??= await ReleaseChecker.FetchLatestAsync(Version);
+                        url = lastRelease.SetupUrl ?? "";
+                        name = lastRelease.SetupName ?? $"AIVideoEditor-Setup-{lastRelease.LatestVersion}.exe";
+                    }
+                    if (string.IsNullOrWhiteSpace(url))
+                        throw new EditException("No Windows Setup installer asset was found on this release.");
+
+                    var installerPath = await ReleaseChecker.DownloadInstallerAsync(url, name, (pct, dlMb, totMb) =>
+                    {
+                        Emit("update_progress", new
+                        {
+                            pct,
+                            downloadedMb = Math.Round(dlMb, 1),
+                            totalMb = Math.Round(totMb, 1),
+                        });
+                    });
+                    Process.Start(new ProcessStartInfo(installerPath) { UseShellExecute = true });
+                    _ = Dispatcher.BeginInvoke(() => System.Windows.Application.Current.Shutdown());
+                    return new { launched = true, path = installerPath };
+                }
+                finally
+                {
+                    installingUpdate = false;
+                }
+            }
+            case "download_youtube":
+            {
+                var url = A(a, 0);
+                var mode = A(a, 1, "audio");
+                var dl = await Task.Run(() => YouTubeDownloader.DownloadAsync(url, mode, msg => Emit("info", msg), CancellationToken.None));
+                var dto = dl.ToDto();
+                Emit("media_downloaded", dto);
+                return dto;
             }
             case "send":
             {

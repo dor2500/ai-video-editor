@@ -25,7 +25,7 @@ const ORIGIN = 'https://aive.local';
 let appState = null;
 let overview = null;
 let currentProjectPath = null;
-let updUrl = '';
+let updateInfo = null;
 let busy = false;
 let pendingSendText = null;
 let typingEl = null;
@@ -89,6 +89,7 @@ const SVG = {
   motion: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>',
   refresh: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
   check: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>',
+  download: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>',
 };
 
 let toastTimer = null;
@@ -147,6 +148,7 @@ function renderTopStatus() {
   const name = pi ? pi.display.replace(' (free models)', '').replace(/ \(.*\)/, '') : appState.provider;
   $('provpill').textContent = `AI: ${name}`;
   $('provpill').className = 'pill ' + (appState.hasKey ? 'ok' : 'warn');
+  renderUpdateButton();
   const ed = edInfo();
   if (ed) {
     $('btnOpenEditor').textContent = `Open in ${ed.display.replace(' (export all formats)', '')}`;
@@ -366,6 +368,7 @@ function renderBin() {
       <div class="subnav-label">Import</div>
       <button class="subnav-btn" onclick="importMediaFiles()"><span>Files</span><span>+</span></button>
       <button class="subnav-btn" onclick="importMediaFolder()"><span>Folder</span><span>+</span></button>
+      <button class="subnav-btn" onclick="showYouTubeModal()"><span>YouTube</span><span>+</span></button>
       <div class="subnav-label">Library</div>
       ${subItems.map(s => `<button class="subnav-btn ${binFilter === s.id ? 'active' : ''}" onclick="setBinFilter('${s.id}')"><span>${s.label}</span></button>`).join('')}
       <button class="subnav-btn ${binTab === 'projects' ? 'active' : ''}" onclick="setBinTab('projects')"><span>Projects</span></button>
@@ -394,6 +397,7 @@ function renderBin() {
       <div class="bin-controls">
         <button class="cyan" style="padding:4px 9px;font-size:11px" onclick="importMediaFiles()">+ Import</button>
         <button style="padding:4px 8px;font-size:11px" onclick="importMediaFolder()">Folder</button>
+        <button style="padding:4px 8px;font-size:11px" onclick="showYouTubeModal()" title="Download song or video from YouTube">YouTube</button>
         <div class="search-box">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
           <input value="${esc(binSearch)}" placeholder="Search media" oninput="binSearch=this.value; renderBin()">
@@ -2185,10 +2189,110 @@ function addMarkerAtPlayhead() {
 })();
 
 // ---------------- EditPilot AI Chat ----------------
+function renderMarkdown(md) {
+  const raw = String(md ?? '').replace(/\r\n/g, '\n');
+  const blocks = [];
+  const src = raw.replace(/```[^\n]*\n([\s\S]*?)```/g, (_, code) => {
+    const idx = blocks.length;
+    blocks.push(`<pre class="md-code" dir="ltr"><code>${esc(code.replace(/\n$/, ''))}</code></pre>`);
+    return `\u0000B${idx}\u0000`;
+  });
+
+  const fmtInline = s => {
+    const codes = [];
+    let out = esc(s).replace(/`([^`\n]+)`/g, (_, c) => {
+      const idx = codes.length;
+      codes.push(`<code class="md-inline-code" dir="ltr">${c}</code>`);
+      return `\u0001C${idx}\u0001`;
+    });
+    out = out.replace(/\[([^\]]+)\]\((https:\/\/[^)\s]+)\)|(https:\/\/[^\s<)]+)/g, (_, label, mdUrl, bareUrl) => {
+      const url = mdUrl || bareUrl;
+      return `<a href="#" data-url="${url}" onclick="event.preventDefault(); api.open_url(this.dataset.url)">${label || url}</a>`;
+    });
+    out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    out = out.replace(/\u0001C(\d+)\u0001/g, (_, i) => codes[Number(i)] || '');
+    return out;
+  };
+
+  const splitCells = line => {
+    let t = line.trim();
+    if (t.startsWith('|')) t = t.slice(1);
+    if (t.endsWith('|')) t = t.slice(0, -1);
+    return t.split('|').map(c => c.trim());
+  };
+  const isSepRow = line => /^\s*\|?(\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$/.test(line)
+    || /^\s*\|(\s*:?-{3,}:?\s*\|)+\s*$/.test(line);
+
+  const lines = src.split('\n');
+  const html = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const bm = line.trim().match(/^\u0000B(\d+)\u0000$/);
+    if (bm) { html.push(blocks[Number(bm[1])] || ''); continue; }
+    if (!line.trim()) continue;
+
+    if (line.includes('|') && i + 1 < lines.length && isSepRow(lines[i + 1])) {
+      const headers = splitCells(line);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim()) {
+        rows.push(splitCells(lines[i]));
+        i++;
+      }
+      i--;
+      const ths = headers.map(h => `<th>${fmtInline(h)}</th>`).join('');
+      const trs = rows.map(r => `<tr>${headers.map((_, ci) => `<td>${fmtInline(r[ci] ?? '')}</td>`).join('')}</tr>`).join('');
+      html.push(`<div class="md-table-wrap"><table class="md-table" dir="auto"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`);
+      continue;
+    }
+
+    const hm = line.match(/^\s*#{1,4}\s+(.+)$/);
+    if (hm) { html.push(`<div class="md-h" dir="auto">${fmtInline(hm[1])}</div>`); continue; }
+
+    if (/^\s*[-*•]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*[-*•]\s+/.test(lines[i])) {
+        items.push(`<li dir="auto">${fmtInline(lines[i].replace(/^\s*[-*•]\s+/, ''))}</li>`);
+        i++;
+      }
+      i--;
+      html.push(`<ul class="md-list">${items.join('')}</ul>`);
+      continue;
+    }
+
+    if (/^\s*\d+[.)]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
+        items.push(`<li dir="auto">${fmtInline(lines[i].replace(/^\s*\d+[.)]\s+/, ''))}</li>`);
+        i++;
+      }
+      i--;
+      html.push(`<ol class="md-list">${items.join('')}</ol>`);
+      continue;
+    }
+
+    const para = [];
+    while (i < lines.length && lines[i].trim()
+      && !/^\s*#{1,4}\s+/.test(lines[i])
+      && !/^\s*[-*•]\s+/.test(lines[i])
+      && !/^\s*\d+[.)]\s+/.test(lines[i])
+      && !/^\u0000B(\d+)\u0000$/.test(lines[i].trim())
+      && !(lines[i].includes('|') && i + 1 < lines.length && isSepRow(lines[i + 1]))) {
+      para.push(fmtInline(lines[i]));
+      i++;
+    }
+    i--;
+    html.push(`<p class="md-p" dir="auto">${para.join('<br>')}</p>`);
+  }
+  return html.join('');
+}
+
 function addChat(cls, html) {
   $('chatWelcome')?.remove();
   const d = document.createElement('div');
   d.className = cls;
+  if (cls.includes('user') || cls.includes('bot')) d.setAttribute('dir', 'auto');
   d.innerHTML = html;
   const log = $('chatLog');
   if (typingEl && typingEl.parentNode) log.insertBefore(d, typingEl);
@@ -2380,15 +2484,154 @@ async function handleExternalTimelineDrop(paths, dropMeta) {
   if (!visual.length && !audio.length) renderBin();
 }
 
+function addToMediaPool(item) {
+  if (!item?.path) return;
+  const k = item.path.toLowerCase();
+  const idx = localMediaPool.findIndex(x => (x.path || '').toLowerCase() === k);
+  if (idx >= 0) localMediaPool[idx] = { ...localMediaPool[idx], ...item };
+  else localMediaPool.push({ ...item, in_timeline: false });
+  renderBin();
+}
+
+function showYouTubeModal() {
+  $('ytUrl').value = '';
+  $('ytMode').value = binTab === 'audio' ? 'audio' : 'audio';
+  $('ytStatus').textContent = '';
+  $('btnYtDownload').disabled = false;
+  $('btnYtCancel').disabled = false;
+  showModal('mYouTube');
+  setTimeout(() => $('ytUrl').focus(), 40);
+}
+
+async function downloadYouTubeNow() {
+  const url = $('ytUrl').value.trim();
+  const mode = $('ytMode').value || 'audio';
+  const addTimeline = $('ytAddToTimeline').checked;
+  if (!url) { $('ytUrl').focus(); return; }
+  $('btnYtDownload').disabled = true;
+  $('btnYtCancel').disabled = true;
+  $('ytStatus').textContent = 'Downloading from YouTube... (first run also fetches yt-dlp)';
+  try {
+    const res = await api.download_youtube(url, mode);
+    addToMediaPool(res);
+    if (addTimeline && overview) {
+      $('ytStatus').textContent = 'Adding to timeline...';
+      if (res.kind === 'audio') {
+        await runTool('add_audio', { path: res.path, fit_to_video: true, fade_out: 2 }, `Add ${res.title || 'audio'}`);
+      } else {
+        await runTool('add_media', { paths: [res.path], target: 'main' }, `Add ${res.title || 'video'}`);
+      }
+    }
+    hideModal('mYouTube');
+    toast(`Downloaded "${res.title || res.name}"`);
+  } catch (e) {
+    $('ytStatus').textContent = e.message || String(e);
+  } finally {
+    $('btnYtDownload').disabled = false;
+    $('btnYtCancel').disabled = false;
+  }
+}
+
+function renderUpdateButton() {
+  const b = $('updBtn');
+  if (!b) return;
+  if (updateInfo?.hasUpdate) {
+    b.className = 'has-update';
+    b.innerHTML = `${SVG.download}<span>Update v${esc(updateInfo.latest)}</span>`;
+    b.title = `Update available: v${updateInfo.latest} (current v${updateInfo.current || appState?.version || ''})`;
+  } else {
+    b.className = 'ghost';
+    const ver = updateInfo?.current || appState?.version || '';
+    b.innerHTML = `${SVG.download}<span>${ver ? 'v' + esc(ver) : 'Updates'}</span>`;
+    b.title = 'Check GitHub Releases for updates';
+  }
+}
+
+function renderUpdateModal() {
+  const sum = $('updSummary');
+  const notes = $('updNotes');
+  const inst = $('btnInstallUpd');
+  if (!updateInfo) {
+    sum.innerHTML = `Current version: <b>v${esc(appState?.version || '')}</b>`;
+    notes.innerHTML = '<div style="color:var(--text-muted)">Click Check Again to fetch the latest GitHub Release.</div>';
+    inst.style.display = 'none';
+    return;
+  }
+  const pub = updateInfo.published ? ` · ${updateInfo.published.slice(0, 10)}` : '';
+  if (updateInfo.hasUpdate) {
+    sum.innerHTML = `<span style="color:var(--accent);font-weight:600">New release v${esc(updateInfo.latest)} available</span> (installed: v${esc(updateInfo.current)})${pub}`;
+  } else {
+    sum.innerHTML = `You are up to date on <b>v${esc(updateInfo.current)}</b> (latest on GitHub: v${esc(updateInfo.latest)})${pub}`;
+  }
+  notes.innerHTML = renderMarkdown(updateInfo.notes || 'No release notes provided.');
+  if (updateInfo.setupUrl) {
+    const mb = updateInfo.setupSize ? ` (${(updateInfo.setupSize / (1024 * 1024)).toFixed(1)} MB)` : '';
+    inst.style.display = '';
+    inst.textContent = (updateInfo.hasUpdate ? 'Download & Install' : 'Reinstall') + mb;
+    inst.className = updateInfo.hasUpdate ? 'cyan' : '';
+  } else {
+    inst.style.display = 'none';
+  }
+}
+
+async function openUpdateModal() {
+  $('updProgWrap').style.display = 'none';
+  $('updProgFill').style.width = '0%';
+  showModal('mUpdate');
+  renderUpdateModal();
+  await checkUpdateNow(true);
+}
+
+function openReleasesPage() {
+  api.open_url(updateInfo?.url || 'https://github.com/dor2500/ai-video-editor/releases');
+}
+
+async function checkUpdateNow(quiet = false) {
+  const btn = $('btnCheckUpd');
+  btn.disabled = true;
+  if (!quiet) $('updSummary').textContent = 'Checking GitHub Releases...';
+  try {
+    updateInfo = await api.check_update();
+    renderUpdateButton();
+    renderUpdateModal();
+  } catch (e) {
+    if (!quiet || !updateInfo) $('updSummary').textContent = `Could not reach GitHub Releases: ${e.message || e}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function installUpdateNow() {
+  if (!updateInfo?.setupUrl) { openReleasesPage(); return; }
+  $('btnInstallUpd').disabled = true;
+  $('btnCheckUpd').disabled = true;
+  $('updProgWrap').style.display = 'flex';
+  $('updProgFill').style.width = '2%';
+  $('updProgText').textContent = `Downloading ${updateInfo.setupName || 'installer'}...`;
+  try {
+    await api.install_update(updateInfo.setupUrl, updateInfo.setupName || '');
+    $('updProgFill').style.width = '100%';
+    $('updProgText').textContent = 'Launching installer...';
+  } catch (e) {
+    $('updProgText').textContent = `Download failed: ${e.message || e}`;
+    $('btnInstallUpd').disabled = false;
+    $('btnCheckUpd').disabled = false;
+  }
+}
+
 function onEvent(kind, data) {
-  if (kind === 'assistant') addChat('chat-msg bot', esc(data));
+  if (kind === 'assistant') addChat('chat-msg bot', renderMarkdown(data));
   else if (kind === 'tool') {
     const d = addChat('tool-log', `Tool: ${esc(data.name)}<pre>${esc(JSON.stringify(data.input, null, 2))}</pre>`);
     d.onclick = () => d.classList.toggle('open');
   }
   else if (kind === 'changed') { refreshOverview(); if (data) addChat('chat-msg sys', esc(data)); }
   else if (kind === 'error') addChat('chat-msg err', esc(data));
-  else if (kind === 'info') addChat('chat-msg sys', esc(data));
+  else if (kind === 'info') {
+    if ($('mYouTube')?.style.display === 'flex' && typeof data === 'string') $('ytStatus').textContent = data;
+    addChat('chat-msg sys', esc(data));
+  }
+  else if (kind === 'media_downloaded') { addToMediaPool(data); }
   else if (kind === 'provider') {
     if (appState) { appState.provider = data.id; const p = provInfo(data.id); if (p) p.hasKey = true; renderTopStatus(); }
   }
@@ -2401,7 +2644,16 @@ function onEvent(kind, data) {
       else probeAndAddToBin(data);
     }
   }
-  else if (kind === 'update') { updUrl = data.url; const b = $('updBtn'); b.textContent = `Update v${data.version}`; b.style.display = ''; }
+  else if (kind === 'update') { updateInfo = data; renderUpdateButton(); if ($('mUpdate')?.style.display === 'flex') renderUpdateModal(); }
+  else if (kind === 'update_progress') {
+    if ($('updProgWrap')) {
+      $('updProgWrap').style.display = 'flex';
+      $('updProgFill').style.width = `${Math.max(0, Math.min(100, data?.pct || 0))}%`;
+      $('updProgText').textContent = data?.totalMb > 0
+        ? `Downloading... ${data.pct}% (${data.downloadedMb} / ${data.totalMb} MB)`
+        : `Downloading... (${data?.downloadedMb || 0} MB)`;
+    }
+  }
   else if (kind === 'project') { currentProjectPath = data.path; localMediaPool = []; selectedBinPaths.clear(); catalogCache = {}; selectSingleClip(null); playheadSec = 0; needsTimelineFit = true; refreshOverview(); loadProjects(); }
   else if (kind === 'done') { setBusy(false); refreshOverview(); }
 }
@@ -2431,7 +2683,7 @@ document.addEventListener('drop', e => {
   catch { pendingExternalDrop = null; toast('Drop local files or folders from Windows Explorer'); }
 });
 
-['mSettings', 'mNew', 'mRun', 'mExport'].forEach(id =>
+['mSettings', 'mNew', 'mRun', 'mExport', 'mUpdate', 'mYouTube'].forEach(id =>
   $(id).addEventListener('click', e => { if (e.target.id === id) hideModal(id); }));
 
 // ---------------- Keyboard Shortcuts ----------------

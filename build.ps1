@@ -1,5 +1,5 @@
 # Builds the app, runs the self-test and produces dist\AIVideoEditor-Setup-<version>.exe + a portable exe.
-param([string]$Version = "2.6.0", [switch]$SkipTests)
+param([string]$Version = "2.7.0", [switch]$SkipTests)
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $dist = Join-Path $root "dist"

@@ -351,6 +351,60 @@ if (capcut != null)
     Check(usedModel == "big-70b", $"automatic model choice used '{usedModel}'");
 }
 
+// ---- ReleaseChecker tests
+{
+    Console.WriteLine("[ReleaseChecker]");
+    var newerJson = """
+    {
+      "tag_name": "v2.9.0",
+      "html_url": "https://github.com/dor2500/ai-video-editor/releases/tag/v2.9.0",
+      "body": "### Release Notes\n- Faster updates",
+      "published_at": "2026-11-25T20:00:00Z",
+      "assets": [
+        { "name": "AIVideoEditor-2.9.0-portable.exe", "size": 70000000, "browser_download_url": "https://github.com/dor2500/ai-video-editor/releases/download/v2.9.0/AIVideoEditor-2.9.0-portable.exe" },
+        { "name": "AIVideoEditor-Setup-2.9.0.exe", "size": 74000000, "browser_download_url": "https://github.com/dor2500/ai-video-editor/releases/download/v2.9.0/AIVideoEditor-Setup-2.9.0.exe" }
+      ]
+    }
+    """;
+    var rNew = ReleaseChecker.ParseReleaseJson(newerJson, "2.7.0");
+    Check(rNew.HasUpdate && rNew.LatestVersion == "2.9.0", "detects newer GitHub release");
+    Check(rNew.SetupName == "AIVideoEditor-Setup-2.9.0.exe" && rNew.SetupUrl?.EndsWith("AIVideoEditor-Setup-2.9.0.exe") == true, "picks official Setup installer asset");
+
+    var rSame = ReleaseChecker.ParseReleaseJson(newerJson.Replace("v2.9.0", "v2.7.0"), "2.7.0");
+    Check(!rSame.HasUpdate, "current version reports up to date");
+
+    var evilJson = """
+    {
+      "tag_name": "v3.0.0",
+      "html_url": "https://github.com/dor2500/ai-video-editor/releases/tag/v3.0.0",
+      "assets": [
+        { "name": "AIVideoEditor-Setup-3.0.0.exe", "size": 123, "browser_download_url": "https://evil.example.com/Setup.exe" }
+      ]
+    }
+    """;
+    var rEvil = ReleaseChecker.ParseReleaseJson(evilJson, "2.7.0");
+    Check(rEvil.SetupUrl == null, "rejects installer URL outside dor2500/ai-video-editor releases");
+}
+
+// ---- YouTubeDownloader tests
+{
+    Console.WriteLine("[YouTubeDownloader]");
+    Check(YouTubeDownloader.NormalizeTarget("https://www.youtube.com/watch?v=dQw4w9WgXcQ") == "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "accepts youtube.com watch URL");
+    Check(YouTubeDownloader.NormalizeTarget("https://youtu.be/dQw4w9WgXcQ") == "https://youtu.be/dQw4w9WgXcQ", "accepts youtu.be short URL");
+    Check(YouTubeDownloader.NormalizeTarget("https://music.youtube.com/watch?v=abc") == "https://music.youtube.com/watch?v=abc", "accepts music.youtube.com URL");
+    Check(YouTubeDownloader.NormalizeTarget("Idan Raichel Chaim Sheli") == "ytsearch1:Idan Raichel Chaim Sheli", "converts song query to ytsearch1");
+
+    bool rejectedOtherHost = false;
+    try { YouTubeDownloader.NormalizeTarget("https://example.com/song.mp3"); } catch (EditException) { rejectedOtherHost = true; }
+    Check(rejectedOtherHost, "rejects non-YouTube URL");
+
+    bool rejectedFlag = false;
+    try { YouTubeDownloader.NormalizeTarget("--exec calc.exe"); } catch (EditException) { rejectedFlag = true; }
+    Check(rejectedFlag, "rejects CLI flag injection");
+
+    Check(AIVideoEditor.AI.ToolDefs.Global.Any(t => t.Name == "download_youtube"), "download_youtube tool registered globally for EditPilot");
+}
+
 // ---- optional: leave a finished demo project (used for the README screenshot)
 var demoIdx = Array.IndexOf(args, "--demo");
 if (demoIdx >= 0 && demoIdx + 1 < args.Length)
