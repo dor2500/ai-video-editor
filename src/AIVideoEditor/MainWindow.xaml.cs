@@ -73,7 +73,18 @@ public partial class MainWindow : Window
             ev.Cancel = true;
             if (ev.Uri.StartsWith("https://")) Process.Start(new ProcessStartInfo(ev.Uri) { UseShellExecute = true });
         };
-        core.NavigationCompleted += async (_, _) => await CheckForUpdate();
+        core.NavigationCompleted += async (_, _) =>
+        {
+            await CheckForUpdate();
+            if (Environment.GetEnvironmentVariable("AIVE_SCREENSHOT") is { Length: > 0 } shotPath)
+            {
+                await Task.Delay(3000);
+                using var ms = new MemoryStream();
+                await core.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, ms);
+                await File.WriteAllBytesAsync(shotPath, ms.ToArray());
+                Close();
+            }
+        };
         core.NewWindowRequested += (_, e) =>
         {
             e.Handled = true;
