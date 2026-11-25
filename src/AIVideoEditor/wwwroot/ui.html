@@ -12,7 +12,7 @@
   <header class="topbar">
     <div class="tb-left">
       <div class="brand">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00d2c8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 7l8 5-8 5V7z"/><path d="M13 7l7 5-7 5"/>
         </svg>
         <span>AI Video Editor</span>
@@ -31,6 +31,7 @@
           <button onclick="closeMenu(); api.reveal()">Reveal Project in Explorer</button>
         </div>
       </div>
+      <select id="topEditorSel" class="top-editor-sel" onchange="switchEditor(this.value)" title="Switch video editor and matching workspace theme"></select>
       <div class="autosave" id="autoSaveLabel">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M20 6L9 17l-5-5"/></svg>
         <span>Ready</span>
@@ -56,8 +57,8 @@
 
   <!-- Upper 3-Pane Workspace -->
   <div class="workspace" id="workspace">
-    <!-- Left Media & CapCut Asset Bin -->
-    <section class="pane">
+    <!-- Left Media & Editor Tool Bin -->
+    <section class="pane pane-bin" id="paneBin">
       <div class="bin-tabs" id="binTabs">
         <button class="bin-tab active" data-tab="media" onclick="setBinTab('media')">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 9l5 3-5 3V9z"/></svg>
@@ -99,17 +100,23 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="5" rx="1"/><rect x="13" y="10" width="8" height="11" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/></svg>
           <span>Templates</span>
         </button>
+        <button class="bin-tab camtasia-only" data-tab="projects" onclick="setBinTab('projects')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+          <span>Projects</span>
+        </button>
       </div>
 
-      <div class="bin-body" id="binBody"></div>
+      <div class="bin-content-col">
+        <div class="bin-body" id="binBody"></div>
 
-      <div class="bin-footer">
-        <div class="bin-footer-left">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#00d2c8" stroke-width="2"><path d="M12 3l1.9 4.2L18 9l-4.1 1.8L12 15l-1.9-4.2L6 9l4.1-1.8L12 3z"/></svg>
-          <span>AI clipper</span>
-          <span style="color:var(--text-muted);font-weight:400">Select media to get started</span>
+        <div class="bin-footer">
+          <div class="bin-footer-left">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M12 3l1.9 4.2L18 9l-4.1 1.8L12 15l-1.9-4.2L6 9l4.1-1.8L12 3z"/></svg>
+            <span id="binFooterTitle">AI clipper</span>
+            <span id="binFooterSub" style="color:var(--text-muted);font-weight:400">Select media to get started</span>
+          </div>
+          <button class="cyan" id="binFooterBtn" style="padding:3px 9px;font-size:11px" onclick="openEditPilot()">Start clipping</button>
         </div>
-        <button class="cyan" style="padding:3px 9px;font-size:11px" onclick="openEditPilot()">Start clipping</button>
       </div>
     </section>
 
@@ -183,9 +190,9 @@
     <!-- Right Inspector & EditPilot -->
     <section class="pane">
       <div class="insp-tabs">
-        <button class="insp-tab active" data-tab="project" onclick="setInspTab('project')">Project</button>
-        <button class="insp-tab" data-tab="details" onclick="setInspTab('details')">Details</button>
-        <button class="insp-tab" data-tab="editpilot" onclick="setInspTab('editpilot')">EditPilot</button>
+        <button class="insp-tab active" id="inspTabProject" data-tab="project" onclick="setInspTab('project')">Project</button>
+        <button class="insp-tab" id="inspTabDetails" data-tab="details" onclick="setInspTab('details')">Details</button>
+        <button class="insp-tab" id="inspTabEditPilot" data-tab="editpilot" onclick="setInspTab('editpilot')">EditPilot</button>
       </div>
       <div class="insp-body" id="inspProject"></div>
       <div class="insp-body" id="inspDetails" style="display:none"></div>

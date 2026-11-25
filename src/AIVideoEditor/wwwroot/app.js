@@ -19,8 +19,76 @@ window.chrome.webview.addEventListener('message', e => {
 });
 
 const $ = id => document.getElementById(id);
-const DIRECT_EDITORS = ['capcut', 'shotcut', 'openshot'];
+const DIRECT_EDITORS = ['capcut', 'camtasia', 'shotcut', 'openshot'];
 const ORIGIN = 'https://aive.local';
+
+const EDITOR_SKINS = {
+  capcut: {
+    stagePrefix: 'Player',
+    inspProject: 'Project',
+    inspDetails: 'Details',
+    footerTitle: 'AI clipper',
+    footerSub: 'Select media to get started',
+    footerBtn: 'Start clipping',
+    binLabels: {
+      media: 'Media', audio: 'Audio', text: 'Text', stickers: 'Stickers',
+      effects: 'Effects', transitions: 'Transitions', captions: 'Captions',
+      filters: 'Filters', adjustment: 'Adjustment', templates: 'Templates', projects: 'Projects',
+    },
+  },
+  camtasia: {
+    stagePrefix: 'Canvas',
+    inspProject: 'Project',
+    inspDetails: 'Properties',
+    footerTitle: 'Camtasia AI',
+    footerSub: 'Direct .tscproj timeline editing',
+    footerBtn: 'Ask EditPilot',
+    binLabels: {
+      media: 'Media', audio: 'Audio', text: 'Annotations', stickers: 'Callouts',
+      effects: 'Visual FX', transitions: 'Transitions', captions: 'Captions',
+      filters: 'Behaviors', adjustment: 'Animations', templates: 'Library', projects: 'Projects',
+    },
+  },
+  premiere: {
+    stagePrefix: 'Program',
+    inspProject: 'Sequence',
+    inspDetails: 'Effect Controls',
+    footerTitle: 'Premiere Bridge',
+    footerSub: 'Writes FCP7 XML sequence files',
+    footerBtn: 'Open EditPilot',
+    binLabels: {
+      media: 'Project', audio: 'Audio', text: 'Graphics', stickers: 'Overlays',
+      effects: 'Effects', transitions: 'Transitions', captions: 'Captions',
+      filters: 'Lumetri', adjustment: 'Color', templates: 'Presets', projects: 'Projects',
+    },
+  },
+  resolve: {
+    stagePrefix: 'Viewer',
+    inspProject: 'Timeline',
+    inspDetails: 'Inspector',
+    footerTitle: 'Resolve Bridge',
+    footerSub: 'Writes FCPXML & OTIO timelines',
+    footerBtn: 'Open EditPilot',
+    binLabels: {
+      media: 'Media Pool', audio: 'Audio', text: 'Titles', stickers: 'Overlays',
+      effects: 'Effects', transitions: 'Transitions', captions: 'Subtitles',
+      filters: 'Color', adjustment: 'Adjust', templates: 'Presets', projects: 'Projects',
+    },
+  },
+  default: {
+    stagePrefix: 'Player',
+    inspProject: 'Project',
+    inspDetails: 'Details',
+    footerTitle: 'AI Assistant',
+    footerSub: 'Select media to get started',
+    footerBtn: 'Open EditPilot',
+    binLabels: {
+      media: 'Media', audio: 'Audio', text: 'Text', stickers: 'Stickers',
+      effects: 'Effects', transitions: 'Transitions', captions: 'Captions',
+      filters: 'Filters', adjustment: 'Adjustment', templates: 'Templates', projects: 'Projects',
+    },
+  },
+};
 
 let appState = null;
 let overview = null;
@@ -142,8 +210,39 @@ document.addEventListener('click', e => {
   if (!e.target.closest('#clipCtxMenu')) closeCtxMenu();
 });
 
+function applyEditorSkin(editorId) {
+  const id = editorId || 'capcut';
+  const skin = EDITOR_SKINS[id] || EDITOR_SKINS.default;
+  document.documentElement.dataset.editor = id;
+
+  const sel = $('topEditorSel');
+  if (sel && appState?.editors) {
+    sel.innerHTML = appState.editors.map(e =>
+      `<option value="${e.id}" ${e.id === id ? 'selected' : ''}>${esc(e.display)}${e.installed ? ' ✓' : ''}</option>`).join('');
+    sel.value = id;
+  }
+
+  document.querySelectorAll('#binTabs .bin-tab').forEach(btn => {
+    const label = skin.binLabels[btn.dataset.tab];
+    const span = btn.querySelector('span');
+    if (label && span) span.textContent = label;
+  });
+
+  if ($('inspTabProject')) $('inspTabProject').textContent = skin.inspProject;
+  if ($('inspTabDetails')) $('inspTabDetails').textContent = skin.inspDetails;
+  if ($('binFooterTitle')) $('binFooterTitle').textContent = skin.footerTitle;
+  if ($('binFooterSub')) $('binFooterSub').textContent = skin.footerSub;
+  if ($('binFooterBtn')) $('binFooterBtn').textContent = skin.footerBtn;
+  if ($('stageTitle')) {
+    $('stageTitle').textContent = overview
+      ? `${skin.stagePrefix} · ${overview.project || 'Timeline 01'}`
+      : `${skin.stagePrefix} · No Project`;
+  }
+}
+
 function renderTopStatus() {
   if (!appState) return;
+  applyEditorSkin(appState.editor);
   const pi = provInfo(appState.provider);
   const name = pi ? pi.display.replace(' (free models)', '').replace(/ \(.*\)/, '') : appState.provider;
   $('provpill').textContent = `AI: ${name}`;
@@ -197,9 +296,10 @@ async function refreshOverview() {
 
 function applyOverview(ov) {
   overview = ov;
+  const prefix = (EDITOR_SKINS[appState?.editor] || EDITOR_SKINS.default).stagePrefix;
   if (!ov) {
     $('ptitle').textContent = 'No Project Open';
-    $('stageTitle').textContent = 'Player · No Project';
+    $('stageTitle').textContent = `${prefix} · No Project`;
     $('stageMeta').textContent = '—';
     $('btnUndo').disabled = true;
     $('btnRedo').disabled = true;
@@ -212,7 +312,7 @@ function applyOverview(ov) {
     return;
   }
   $('ptitle').textContent = ov.project || 'Untitled';
-  $('stageTitle').textContent = `Player · ${ov.project || 'Timeline 01'}`;
+  $('stageTitle').textContent = `${prefix} · ${ov.project || 'Timeline 01'}`;
   $('stageMeta').textContent = `${ov.width || 1920}×${ov.height || 1080} · ${Math.round(ov.fps || 30)}fps`;
   if ($('ratioSelect') && ov.ratio) $('ratioSelect').value = ov.ratio;
   $('btnUndo').disabled = !ov.can_undo;
@@ -1589,21 +1689,26 @@ function renderTimeline() {
 
   const ordered = visualTracksOrdered();
   const hasOverlays = ordered.some(t => !t.is_main && t.type !== 'audio');
+  const edId = appState?.editor || 'capcut';
+  const isCapCut = edId === 'capcut';
+  const isCamtasia = edId === 'camtasia';
   let hHtml = '', lHtml = '';
-  for (const t of ordered) {
+  for (let idx = 0; idx < ordered.length; idx++) {
+    const t = ordered[idx];
     const h = trackHeight(t), tid = trackApiId(t), locked = lockedTracks.has(tid);
     const mainCls = t.is_main ? 'main-track' : '';
     const hasMute = t.type === 'video' || t.type === 'audio', hasEye = t.type !== 'audio';
 
     if (t.is_main) {
-      const spaceH = hasOverlays ? 24 : 112;
+      const spaceH = hasOverlays ? 24 : (isCamtasia ? 44 : 112);
       hHtml += `<div style="height:${spaceH}px"></div>`;
       lHtml += `<div class="tl-overlay-space ${hasOverlays ? 'compact' : ''}" id="tlOverlaySpace">+ Drop photo / video here for overlay track</div>`;
     }
 
-    const coverHtml = t.is_main
+    const trackLabel = isCamtasia ? `Track ${ordered.length - idx}` : trackShortBadge(t);
+    const coverHtml = (t.is_main && isCapCut)
       ? `<div class="tl-cover-box" onclick="setInspTab('project')" title="Cover &amp; Project settings">${SVG.cover}<span>Cover</span></div>`
-      : `<span class="tl-hdr-badge">${trackShortBadge(t)}</span>`;
+      : `<span class="tl-hdr-badge ${t.is_main ? 'main' : ''}">${trackLabel}</span>`;
 
     hHtml += `<div class="tl-track-hdr ${mainCls}" style="height:${h}px">
       <div class="tl-hdr-btns">

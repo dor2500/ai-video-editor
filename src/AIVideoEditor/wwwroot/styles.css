@@ -90,8 +90,7 @@ button.cyan {
   font-weight: 600;
 }
 button.cyan:hover:not(:disabled) {
-  background: #1ae4da;
-  border-color: #1ae4da;
+  filter: brightness(1.08);
 }
 button.ghost {
   background: transparent;
@@ -247,7 +246,17 @@ select {
 }
 .pill.ok {
   color: var(--accent);
-  border-color: rgba(0, 210, 200, 0.35);
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+.top-editor-sel {
+  height: 26px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  max-width: 170px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
 }
 .pill.warn {
   color: var(--warn);
@@ -309,7 +318,17 @@ select {
 }
 .bin-tab.active {
   color: var(--accent);
-  background: rgba(0, 210, 200, 0.08);
+  background: var(--accent-bg);
+}
+.camtasia-only {
+  display: none;
+}
+.bin-content-col {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 .bin-body {
   flex: 1;
@@ -1279,7 +1298,6 @@ select {
 
 /* ---------------- Bottom Multi-Track Timeline ---------------- */
 .timeline-dock {
-.timeline-dock {
   height: 42vh;
   min-height: 230px;
   flex: none;
@@ -1394,9 +1412,11 @@ select {
   border: 1px solid var(--border);
   color: var(--text-dim);
   font-weight: 600;
+  white-space: nowrap;
+  flex: none;
 }
 .tl-hdr-badge.main {
-  border-color: rgba(0, 210, 200, 0.35);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
   color: var(--accent);
 }
 
@@ -1755,7 +1775,7 @@ body.dragging::after {
   min-height: 24px;
 }
 .tl-overlay-space.hot {
-  background: rgba(0, 210, 200, 0.1);
+  background: var(--accent-bg);
   color: var(--accent);
   border-bottom: 1px dashed var(--accent);
 }
@@ -1878,4 +1898,140 @@ body.dragging::after {
   .workspace {
     grid-template-columns: 350px minmax(300px, 1fr) 290px;
   }
+}
+
+/* ---------------- Per-Editor Skins & Layouts ---------------- */
+html[data-editor="camtasia"] {
+  --bg-root: #171719;
+  --bg-bar: #1f1f22;
+  --bg-panel: #252528;
+  --bg-surface: #2e2e33;
+  --bg-surface-2: #38383e;
+  --bg-hover: #43434b;
+  --border: #34343a;
+  --border-strong: #484852;
+  --accent: #76b82a;
+  --accent-dim: #5d971e;
+  --accent-bg: rgba(118, 184, 42, 0.16);
+  --green-line: #76b82a;
+  --teal-clip: #285d72;
+  --blue-clip: #296b38;
+}
+html[data-editor="camtasia"] .pane-bin {
+  flex-direction: row;
+}
+html[data-editor="camtasia"] .bin-tabs {
+  width: 114px;
+  height: auto;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 6px 5px;
+  gap: 2px;
+  border-bottom: none;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+html[data-editor="camtasia"] .bin-tab {
+  flex: none;
+  height: 31px;
+  flex-direction: row;
+  justify-content: flex-start;
+  padding: 0 9px;
+  gap: 8px;
+  font-size: 11.5px;
+  border-left: 2px solid transparent;
+  border-radius: 4px;
+}
+html[data-editor="camtasia"] .bin-tab.active {
+  border-left-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+html[data-editor="camtasia"] .camtasia-only {
+  display: inline-flex;
+}
+html[data-editor="camtasia"] .bin-subnav {
+  display: none;
+}
+html[data-editor="camtasia"] .tl-overlay-space {
+  min-height: 44px;
+}
+html[data-editor="camtasia"] .tl-playhead-handle {
+  width: 15px;
+  left: -7px;
+  border-radius: 3px 3px 1px 1px;
+  background: #e8eaf0;
+  border-left: 4px solid #76b82a;
+  border-right: 4px solid #e05252;
+}
+html[data-editor="camtasia"] .tl-track-hdr.main-track,
+html[data-editor="camtasia"] .tl-lane.main-track {
+  border-top-color: rgba(118, 184, 42, 0.45);
+}
+html[data-editor="camtasia"] .tl-hdr-badge {
+  min-width: 50px;
+  text-align: center;
+}
+
+html[data-editor="premiere"] {
+  --bg-root: #171717;
+  --bg-bar: #1d1d1d;
+  --bg-panel: #232323;
+  --bg-surface: #2c2c2c;
+  --bg-surface-2: #353535;
+  --accent: #2d8ceb;
+  --accent-dim: #1e6fc2;
+  --accent-bg: rgba(45, 140, 235, 0.16);
+  --green-line: #2d8ceb;
+  --teal-clip: #31598c;
+  --blue-clip: #266b52;
+}
+html[data-editor="resolve"] {
+  --bg-root: #1a1b1e;
+  --bg-bar: #202126;
+  --bg-panel: #26272d;
+  --bg-surface: #30313a;
+  --accent: #ef5350;
+  --accent-dim: #d43f3c;
+  --accent-bg: rgba(239, 83, 80, 0.16);
+  --green-line: #ef5350;
+  --teal-clip: #35527a;
+  --blue-clip: #2e6d57;
+}
+html[data-editor="shotcut"] {
+  --accent: #3daee9;
+  --accent-dim: #2b8dc2;
+  --accent-bg: rgba(61, 174, 233, 0.15);
+  --green-line: #3daee9;
+}
+html[data-editor="openshot"] {
+  --accent: #4ea8de;
+  --accent-dim: #3a89ba;
+  --accent-bg: rgba(78, 168, 222, 0.15);
+  --green-line: #4ea8de;
+}
+html[data-editor="kdenlive"] {
+  --accent: #3daee9;
+  --accent-dim: #2b8dc2;
+  --accent-bg: rgba(61, 174, 233, 0.15);
+  --green-line: #3daee9;
+}
+html[data-editor="finalcut"] {
+  --accent: #8b7cf6;
+  --accent-dim: #6f5fe0;
+  --accent-bg: rgba(139, 124, 246, 0.16);
+  --green-line: #8b7cf6;
+}
+html[data-editor="vegas"] {
+  --accent: #0095d9;
+  --accent-dim: #0077b3;
+  --accent-bg: rgba(0, 149, 217, 0.15);
+  --green-line: #0095d9;
+}
+html[data-editor="filmora"] {
+  --accent: #00d2a8;
+  --accent-dim: #00b08d;
+  --accent-bg: rgba(0, 210, 168, 0.15);
+  --green-line: #00d2a8;
 }

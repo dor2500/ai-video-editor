@@ -87,7 +87,7 @@ foreach (var ed in Editors.All.Where(e => e.Id != "capcut"))
             try
             {
                 if (f.EndsWith(".xml") || f.EndsWith(".fcpxml") || f.EndsWith(".mlt")) { XDocument.Load(f); okParse = true; }
-                else if (f.EndsWith(".json") || f.EndsWith(".otio") || f.EndsWith(".osp")) { JsonNode.Parse(File.ReadAllText(f)); okParse = true; }
+                else if (f.EndsWith(".json") || f.EndsWith(".otio") || f.EndsWith(".osp") || f.EndsWith(".tscproj")) { JsonNode.Parse(File.ReadAllText(f)); okParse = true; }
                 else okParse = new FileInfo(f).Length > 50;
             }
             catch (Exception e) { Console.WriteLine("     " + e.Message); okParse = false; }
@@ -405,25 +405,28 @@ if (capcut != null)
     Check(AIVideoEditor.AI.ToolDefs.Global.Any(t => t.Name == "download_youtube"), "download_youtube tool registered globally for EditPilot");
 }
 
-// ---- optional: leave a finished demo project (used for the README screenshot)
-var demoIdx = Array.IndexOf(args, "--demo");
-if (demoIdx >= 0 && demoIdx + 1 < args.Length)
+// ---- optional: leave a finished demo project (used for the README screenshots)
+foreach (var (flag, edId) in new[] { ("--demo", "shotcut"), ("--demo-camtasia", "camtasia") })
 {
-    var demoFile = Path.GetFullPath(args[demoIdx + 1]);
-    Directory.CreateDirectory(Path.GetDirectoryName(demoFile)!);
-    var demoMedia = Path.Combine(Path.GetDirectoryName(demoFile)!, "media");
-    Directory.CreateDirectory(demoMedia);
-    foreach (var f in Directory.GetFiles(gen)) File.Copy(f, Path.Combine(demoMedia, Path.GetFileName(f)), true);
-    var demoWav = Path.Combine(demoMedia, "song.wav");
-    File.Copy(wav, demoWav, true);
-    var dp = new TimelineProject(Editors.Get("shotcut"), demoFile);
-    dp.Run("add_media", A($$"""{"paths":["{{Esc(demoMedia)}}"],"photo_duration":2}"""));
-    dp.Run("add_audio", A($$"""{"path":"{{Esc(demoWav)}}","fit_to_video":true,"fade_out":2}"""));
-    dp.Run("add_text", A("""{"text":"הטיול המשפחתי","start":0,"duration":3,"font_size":14,"y":0.6}"""));
-    dp.Run("set_transitions", A("""{"all_main":true,"name":"Cross Dissolve","duration":0.6}"""));
-    dp.Run("add_motion", A("""{"all_main_photos":true,"preset":"alternate"}"""));
-    dp.Save();
-    Console.WriteLine("demo project: " + demoFile);
+    var demoIdx = Array.IndexOf(args, flag);
+    if (demoIdx >= 0 && demoIdx + 1 < args.Length)
+    {
+        var demoFile = Path.GetFullPath(args[demoIdx + 1]);
+        Directory.CreateDirectory(Path.GetDirectoryName(demoFile)!);
+        var demoMedia = Path.Combine(Path.GetDirectoryName(demoFile)!, "media");
+        Directory.CreateDirectory(demoMedia);
+        foreach (var f in Directory.GetFiles(gen)) File.Copy(f, Path.Combine(demoMedia, Path.GetFileName(f)), true);
+        var demoWav = Path.Combine(demoMedia, "song.wav");
+        File.Copy(wav, demoWav, true);
+        var dp = new TimelineProject(Editors.Get(edId), demoFile);
+        dp.Run("add_media", A($$"""{"paths":["{{Esc(demoMedia)}}"],"photo_duration":2}"""));
+        dp.Run("add_audio", A($$"""{"path":"{{Esc(demoWav)}}","fit_to_video":true,"fade_out":2}"""));
+        dp.Run("add_text", A("""{"text":"הטיול המשפחתי","start":0,"duration":3,"font_size":14,"y":0.6}"""));
+        dp.Run("set_transitions", A("""{"all_main":true,"name":"Cross Dissolve","duration":0.6}"""));
+        dp.Run("add_motion", A("""{"all_main_photos":true,"preset":"alternate"}"""));
+        dp.Save();
+        Console.WriteLine("demo project: " + demoFile);
+    }
 }
 
 Console.WriteLine(fails == 0 ? "ALL PASSED" : $"{fails} FAILED");

@@ -69,6 +69,18 @@ public static class Editors
         },
         new()
         {
+            Id = "camtasia", Display = "Camtasia", Process = "Camtasia*.exe",
+            Exes =
+            [
+                $@"{PF}\TechSmith\Camtasia *\CamtasiaStudio.exe",
+                $@"{PF}\TechSmith\Camtasia *\Camtasia.exe",
+                $@"{PF}\TechSmith\Camtasia\CamtasiaStudio.exe",
+            ],
+            DirectFormat = new CamtasiaFormat(), ProjectExts = [".tscproj"],
+            ProjectDirs = [Path.Combine(Paths.Documents, "Camtasia"), Paths.Documents, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos))],
+        },
+        new()
+        {
             Id = "shotcut", Display = "Shotcut", Process = "shotcut.exe",
             Exes = [$@"{PF}\Shotcut\shotcut.exe", $@"{LAD}\Programs\Shotcut\shotcut.exe"],
             DirectFormat = new MltFormat(), ProjectExts = [".mlt"],
