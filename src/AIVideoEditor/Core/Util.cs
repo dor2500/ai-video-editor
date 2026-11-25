@@ -26,6 +26,25 @@ public static class T
     public const long US = 1_000_000;
     public static long Us(double seconds) => (long)Math.Round(seconds * US);
     public static double Sec(long us) => Math.Round(us / (double)US, 3);
+
+    public static string Ratio(int w, int h) => (w, h) switch
+    {
+        (1920, 1080) or (1280, 720) or (3840, 2160) => "16:9",
+        (1080, 1920) or (720, 1280) or (2160, 3840) => "9:16",
+        (1080, 1080) => "1:1",
+        (1440, 1080) => "4:3",
+        (1080, 1440) => "3:4",
+        (2560, 1080) => "21:9",
+        (1080, 1350) => "4:5",
+        (2160, 1080) => "2:1",
+        _ when w > 0 && h > 0 => Math.Abs((double)w / h - 16.0 / 9.0) < 0.05 ? "16:9"
+            : Math.Abs((double)w / h - 9.0 / 16.0) < 0.05 ? "9:16"
+            : Math.Abs((double)w / h - 1.0) < 0.03 ? "1:1"
+            : Math.Abs((double)w / h - 4.0 / 5.0) < 0.03 ? "4:5"
+            : Math.Abs((double)w / h - 4.0 / 3.0) < 0.03 ? "4:3"
+            : "16:9",
+        _ => "16:9",
+    };
 }
 
 public static class Ids

@@ -128,6 +128,12 @@
             <div>Open a project or import media to preview</div>
           </div>
           <div class="stage-vignette" id="stageVignette"></div>
+          <div class="stage-gizmo" id="stageGizmo" style="display:none">
+            <div class="stage-handle tl" data-corner="tl"></div>
+            <div class="stage-handle tr" data-corner="tr"></div>
+            <div class="stage-handle bl" data-corner="bl"></div>
+            <div class="stage-handle br" data-corner="br"></div>
+          </div>
           <div class="safe-grid" id="safeGrid"></div>
         </div>
       </div>
@@ -305,6 +311,8 @@
         <div class="tl-canvas" id="tlCanvas">
           <div class="tl-ruler" id="tlRuler"></div>
           <div class="tl-lanes" id="tlLanes"></div>
+          <div class="tl-drop-ghost" id="tlDropGhost"></div>
+          <div class="tl-insert-bar" id="tlInsertBar"></div>
           <div class="tl-snap-line" id="tlSnapLine"></div>
           <div class="tl-playhead" id="tlPlayhead">
             <div class="tl-playhead-handle" id="tlPlayheadHandle"></div>

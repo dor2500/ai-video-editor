@@ -141,20 +141,6 @@ public sealed class TimelineProject : EditorProject
     }
 
     // ------------------------------------------------------------------ overview
-    static string RatioOf(int w, int h) => (w, h) switch
-    {
-        (1920, 1080) or (1280, 720) or (3840, 2160) => "16:9",
-        (1080, 1920) or (720, 1280) or (2160, 3840) => "9:16",
-        (1080, 1080) => "1:1",
-        (1440, 1080) => "4:3",
-        (1080, 1440) => "3:4",
-        (2560, 1080) => "21:9",
-        (1080, 1350) => "4:5",
-        (2160, 1080) => "2:1",
-        _ when w > 0 && h > 0 => $"{w}:{h}",
-        _ => "16:9",
-    };
-
     public override JsonNode Overview()
     {
         var tracks = new JsonArray();
@@ -190,7 +176,7 @@ public sealed class TimelineProject : EditorProject
         {
             ["editor"] = editor.Display, ["project"] = Name, ["duration_s"] = T.Sec(Doc.Duration),
             ["canvas"] = $"{Doc.Width}x{Doc.Height}", ["width"] = Doc.Width, ["height"] = Doc.Height,
-            ["ratio"] = RatioOf(Doc.Width, Doc.Height), ["fps"] = Doc.Fps,
+            ["ratio"] = T.Ratio(Doc.Width, Doc.Height), ["fps"] = Doc.Fps,
             ["can_undo"] = CanUndo, ["can_redo"] = CanRedo, ["media_pool"] = pool, ["tracks"] = tracks,
         };
     }

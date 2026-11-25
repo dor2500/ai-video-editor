@@ -50,7 +50,10 @@ public partial class MainWindow : Window
     {
         try
         {
-            var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(Paths.LocalAppData, "AIVideoEditor", "WebView2"));
+            var wvDir = Environment.GetEnvironmentVariable("AIVE_SCREENSHOT") is { Length: > 0 }
+                ? Path.Combine(Path.GetTempPath(), "AIVE-shot-wv2-" + Environment.ProcessId)
+                : Path.Combine(Paths.LocalAppData, "AIVideoEditor", "WebView2");
+            var env = await CoreWebView2Environment.CreateAsync(null, wvDir);
             await Web.EnsureCoreWebView2Async(env);
         }
         catch (Exception)
@@ -234,7 +237,7 @@ public partial class MainWindow : Window
         if (!q.TryGetValue("path", out var path) || string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             return env.CreateWebResourceResponse(Stream.Null, 404, "Not Found", "Content-Type: text/plain");
 
-        int width = q.TryGetValue("w", out var ws) && int.TryParse(ws, out var wi) ? Math.Clamp(wi, 64, 480) : 200;
+        int width = q.TryGetValue("w", out var ws) && int.TryParse(ws, out var wi) ? Math.Clamp(wi, 64, 960) : 200;
         var cacheKey = $"{path}|{width}|{File.GetLastWriteTimeUtc(path).Ticks}";
         if (!ThumbCache.TryGetValue(cacheKey, out var bytes))
         {

@@ -35,6 +35,7 @@ let binTab = 'media';
 let binFilter = 'all';
 let binSearch = '';
 let localMediaPool = [];
+let selectedBinPaths = new Set();
 let catalogCache = {};
 
 let inspTab = 'project';
@@ -55,6 +56,11 @@ let lockedTracks = new Set();
 let markers = [];
 
 let dragState = null;
+let gizmoDrag = null;
+let draggingBinItems = null;
+let currentDropPlan = null;
+let pendingExternalDrop = null;
+
 let activeAudioCtx = null;
 const waveformCache = new Map();
 const activeVideos = new Map();
@@ -330,6 +336,7 @@ function renderBin() {
     if (binSearch && !item.name.toLowerCase().includes(binSearch.toLowerCase())) return false;
     return true;
   });
+  window._visibleBinItems = list;
 
   const subNavHtml = `
     <div class="bin-subnav">
@@ -342,13 +349,14 @@ function renderBin() {
       <button class="subnav-btn" onclick="openEditPilot()"><span>EditPilot</span><span class="ai-mini">AI</span></button>
     </div>`;
 
-  const cardsHtml = list.length ? list.map(item => {
+  const cardsHtml = list.length ? list.map((item, idx) => {
     const durBadge = item.kind !== 'photo' && item.duration_s ? `<span class="badge-dur">${fmtTimeShort(item.duration_s)}</span>` : '';
     const addedBadge = item.in_timeline ? `<span class="badge-added">Added</span>` : '';
+    const isSel = selectedBinPaths.has(item.path) ? 'bin-selected' : '';
     const thumbHtml = item.kind === 'audio'
-      ? `<div class="media-thumb audio-thumb"><div class="audio-bars">${[12, 22, 16, 25, 14, 20, 18, 11].map(h => `<span style="height:${h}px"></span>`).join('')}</div>${addedBadge}${durBadge}<button class="quick-add" onclick="event.stopPropagation(); quickAddMedia('${esc(item.path)}','${item.kind}')" title="Add to timeline">+</button></div>`
-      : `<div class="media-thumb"><img src="${thumbUrl(item.path, 220)}" loading="lazy" alt="">${addedBadge}${durBadge}<button class="quick-add" onclick="event.stopPropagation(); quickAddMedia('${esc(item.path)}','${item.kind}')" title="Add to timeline">+</button></div>`;
-    return `<div class="media-card" draggable="true" ondragstart="onMediaDragStart(event, '${esc(item.path)}', '${item.kind}')" ondblclick="quickAddMedia('${esc(item.path)}','${item.kind}')" title="${esc(item.path)}">
+      ? `<div class="media-thumb audio-thumb"><div class="audio-bars">${[12, 22, 16, 25, 14, 20, 18, 11].map(h => `<span style="height:${h}px"></span>`).join('')}</div>${addedBadge}${durBadge}<button class="quick-add" onclick="event.stopPropagation(); quickAddMediaByIdx(${idx})" title="Add to timeline">+</button></div>`
+      : `<div class="media-thumb"><img src="${thumbUrl(item.path, 220)}" loading="lazy" alt="">${addedBadge}${durBadge}<button class="quick-add" onclick="event.stopPropagation(); quickAddMediaByIdx(${idx})" title="Add to timeline">+</button></div>`;
+    return `<div class="media-card ${isSel}" data-idx="${idx}" draggable="true" onclick="onMediaCardClick(event, ${idx})" ondragstart="onMediaDragStartByIdx(event, ${idx})" ondragend="onMediaDragEnd()" ondblclick="quickAddMediaByIdx(${idx})" title="${esc(item.path)} (Drag onto timeline or Ctrl+Click multi-select)">
       ${thumbHtml}
       <div class="media-name">${esc(item.name)}</div>
     </div>`;
@@ -367,12 +375,51 @@ function renderBin() {
           <input value="${esc(binSearch)}" placeholder="Search media" oninput="binSearch=this.value; renderBin()">
         </div>
       </div>
-      <div class="bin-section-head"><span>${subItems.find(s => s.id === binFilter)?.label || 'All'}</span><span>${list.length} items</span></div>
+      <div class="bin-section-head"><span>${subItems.find(s => s.id === binFilter)?.label || 'All'}${selectedBinPaths.size > 1 ? ` · ${selectedBinPaths.size} selected` : ''}</span><span>${list.length} items</span></div>
       <div class="media-grid">${cardsHtml}</div>
     </div>`;
 }
 
 function setBinFilter(f) { binFilter = f; renderBin(); }
+
+function onMediaCardClick(ev, idx) {
+  const item = window._visibleBinItems?.[idx];
+  if (!item) return;
+  if (ev.ctrlKey || ev.metaKey) {
+    if (selectedBinPaths.has(item.path)) selectedBinPaths.delete(item.path);
+    else selectedBinPaths.add(item.path);
+  } else {
+    selectedBinPaths.clear();
+    selectedBinPaths.add(item.path);
+  }
+  renderBin();
+}
+
+function onMediaDragStartByIdx(ev, idx) {
+  const item = window._visibleBinItems?.[idx];
+  if (!item) return;
+  let items = [item];
+  if (selectedBinPaths.has(item.path) && selectedBinPaths.size > 1) {
+    const multi = (window._visibleBinItems || []).filter(x => selectedBinPaths.has(x.path));
+    if (multi.length) items = multi;
+  } else {
+    selectedBinPaths.clear();
+    selectedBinPaths.add(item.path);
+  }
+  draggingBinItems = items;
+  ev.dataTransfer.setData('application/x-aive-media', JSON.stringify(items));
+  ev.dataTransfer.effectAllowed = 'copy';
+}
+
+function onMediaDragEnd() {
+  draggingBinItems = null;
+  clearTimelineDropIndicators();
+}
+
+function quickAddMediaByIdx(idx) {
+  const item = window._visibleBinItems?.[idx];
+  if (item) quickAddMedia(item.path, item.kind);
+}
 
 function renderTextBin(body) {
   const presets = [
@@ -511,6 +558,7 @@ function renderCatalogBin(body, tab) {
   const cat = tab === 'effects' ? 'effect' : tab === 'transitions' ? 'transition' : 'filter';
   const items = catalogCache[cat] || [];
   const filtered = items.filter(it => !binSearch || (it.name || '').toLowerCase().includes(binSearch.toLowerCase()));
+  window._visibleCatalogItems = filtered;
   body.innerHTML = `
     <div class="bin-main">
       <div class="bin-controls">
@@ -521,13 +569,18 @@ function renderCatalogBin(body, tab) {
       </div>
       <div class="bin-section-head"><span>${tab.charAt(0).toUpperCase() + tab.slice(1)}</span><span>${filtered.length}</span></div>
       <div class="catalog-list">
-        ${filtered.length ? filtered.map(it => {
+        ${filtered.length ? filtered.map((it, idx) => {
           if (it.note) return `<div style="grid-column:1/-1;color:var(--text-muted);padding:10px">${esc(it.note)}</div>`;
           const desc = it.description || (it.used_before ? 'Used before in CapCut' : (it.vip ? 'Pro item' : 'Ready'));
-          return `<button class="cat-card" onclick="applyCatalogItem('${cat}','${esc(it.name)}')"><div class="cname">${esc(it.name)}</div><div class="cdesc">${esc(desc)}</div></button>`;
+          return `<button class="cat-card" onclick="applyCatalogByIdx('${cat}', ${idx})"><div class="cname">${esc(it.name)}</div><div class="cdesc">${esc(desc)}</div></button>`;
         }).join('') : `<div style="grid-column:1/-1;color:var(--text-muted);padding:16px;text-align:center">No ${tab} found in catalog.</div>`}
       </div>
     </div>`;
+}
+
+function applyCatalogByIdx(cat, idx) {
+  const it = window._visibleCatalogItems?.[idx];
+  if (it?.name) applyCatalogItem(cat, it.name);
 }
 
 async function applyCatalogItem(cat, name) {
@@ -546,8 +599,8 @@ function renderProjectsBin(body) {
     `<option value="${e.id}" ${e.id === appState.editor ? 'selected' : ''}>${esc(e.display)}${e.installed ? ' ✓' : ''}${e.exportOnly ? ' (Import)' : ''}</option>`).join('');
   const ed = edInfo();
   const hint = ed ? (DIRECT_EDITORS.includes(ed.id) ? `Direct editing of ${ed.display} project files.` : `Writes import files (${ed.hint}).`) : '';
-  const listHtml = (window._projectList || []).map(p =>
-    `<div class="pitem ${currentProjectPath === p.path ? 'on' : ''}" onclick="openProject('${esc(p.path)}')" title="${esc(p.path)}">
+  const listHtml = (window._projectList || []).map((p, idx) =>
+    `<div class="pitem ${currentProjectPath === p.path ? 'on' : ''}" onclick="openProjectByIdx(${idx})" title="${esc(p.path)}">
       <span>${esc(p.name)}</span>
       <small>${p.duration ? fmtTimeShort(p.duration) : esc((p.modified || '').split(' ')[0])}</small>
     </div>`).join('') || '<div style="color:var(--text-muted);padding:10px">No projects found — create a new project or open a file.</div>';
@@ -564,6 +617,11 @@ function renderProjectsBin(body) {
       </div>
       <div class="plist">${listHtml}</div>
     </div>`;
+}
+
+function openProjectByIdx(idx) {
+  const p = window._projectList?.[idx];
+  if (p?.path) openProject(p.path);
 }
 
 async function importMediaFiles() {
@@ -605,12 +663,7 @@ async function quickAddMedia(path, kind, startSec = null, target = 'main') {
   }
 }
 
-function onMediaDragStart(ev, path, kind) {
-  ev.dataTransfer.setData('application/x-aive-media', JSON.stringify({ path, kind }));
-  ev.dataTransfer.effectAllowed = 'copy';
-}
-
-// ---------------- Preview Stage ----------------
+// ---------------- Preview Stage & Live Transform Gizmo ----------------
 function toggleGrid() {
   const g = $('safeGrid');
   g.classList.toggle('on');
@@ -652,11 +705,35 @@ function buildCssFilter(adj) {
   return `brightness(${br.toFixed(2)}) contrast(${ct.toFixed(2)}) saturate(${sat.toFixed(2)}) hue-rotate(${hue.toFixed(1)}deg) sepia(${sep.toFixed(2)})`;
 }
 
+function positionStageGizmo(clip, vp) {
+  const gizmo = $('stageGizmo');
+  if (!clip || clip.id !== selectedClipId || clip.kind === 'audio') {
+    gizmo.style.display = 'none';
+    return;
+  }
+  const [px, py] = clip.pos || (clip.kind === 'text' ? [0, -0.7] : [0, 0]);
+  const sc = clip.scale ?? 1;
+  const w = vp.clientWidth || 640;
+  const h = vp.clientHeight || 360;
+  const bw = clip.kind === 'text' ? Math.max(120, Math.round(w * 0.48 * sc)) : Math.max(40, Math.round(w * sc));
+  const bh = clip.kind === 'text' ? Math.max(42, Math.round(h * 0.18 * sc)) : Math.max(30, Math.round(h * sc));
+  const cx = w * (0.5 + px * 0.5);
+  const cy = h * (0.5 - py * 0.5);
+  gizmo.style.display = 'block';
+  gizmo.style.width = `${bw}px`;
+  gizmo.style.height = `${bh}px`;
+  gizmo.style.left = `${Math.round(cx - bw / 2)}px`;
+  gizmo.style.top = `${Math.round(cy - bh / 2)}px`;
+  gizmo.style.transform = `rotate(${clip.rot ?? 0}deg)`;
+  gizmo.dataset.clipId = clip.id;
+}
+
 function renderStage() {
   layoutStage();
   const vp = $('stageViewport');
   const empty = $('stageEmpty');
   const vig = $('stageVignette');
+  const gizmo = $('stageGizmo');
   const fps = projectFps();
   $('tcCur').textContent = fmtSmpte(playheadSec, fps);
   $('tcTot').textContent = fmtSmpte(projectDuration(), fps);
@@ -664,6 +741,7 @@ function renderStage() {
   if (!overview) {
     empty.style.display = 'flex';
     vig.style.background = 'none';
+    gizmo.style.display = 'none';
     vp.style.background = '#000';
     clearStageMedia();
     return;
@@ -691,15 +769,18 @@ function renderStage() {
   const activeVidIds = new Set();
   const stageW = vp.clientWidth || 640;
   let maxVignette = 0;
+  let gizmoTarget = null;
   vp.style.background = '#000';
 
   for (const { track, clip } of visualClips) {
     if (clip.visible === false || clip.opacity === 0) continue;
     if (clip.adjust?.vignette) maxVignette = Math.max(maxVignette, clip.adjust.vignette);
+    if (clip.id === selectedClipId) gizmoTarget = clip;
 
     if (clip.kind === 'text') {
       const div = document.createElement('div');
       div.className = 'stage-text-layer';
+      div.dataset.clipId = clip.id;
       const [px, py] = clip.pos || [0, -0.7];
       const scale = clip.scale ?? 1;
       const rot = clip.rot ?? 0;
@@ -727,7 +808,6 @@ function renderStage() {
       continue;
     }
 
-    // Optional canvas background blur or solid color behind the clip
     if (track.is_main) {
       if (clip.canvas_color) vp.style.background = clip.canvas_color;
       if (clip.canvas_blur > 0 && clip.path) {
@@ -740,6 +820,7 @@ function renderStage() {
 
     const layer = document.createElement('div');
     layer.className = 'stage-layer';
+    layer.dataset.clipId = clip.id;
     const [px, py] = clip.pos || [0, 0];
     const sc = clip.scale ?? 1;
     const rot = clip.rot ?? 0;
@@ -763,23 +844,29 @@ function renderStage() {
       layer.appendChild(img);
     } else if (clip.kind === 'video' && clip.path) {
       activeVidIds.add(clip.id);
-      let vid = activeVideos.get(clip.id);
-      if (!vid || vid.dataset.path !== clip.path) {
-        vid = document.createElement('video');
-        vid.dataset.path = clip.path;
-        vid.src = mediaUrl(clip.path);
-        vid.playsInline = true;
-        vid.preload = 'auto';
-        activeVideos.set(clip.id, vid);
-      }
-      vid.muted = !!track.muted || (clip.volume === 0);
-      vid.volume = Math.min(1, Math.max(0, clip.volume ?? 1));
-      vid.playbackRate = clip.speed || 1;
       const elapsed = Math.max(0, playheadSec - clip.start) * (clip.speed || 1);
       const targetTime = clip.reverse
         ? Math.max(0, (clip.source_in || 0) + (clip.dur * (clip.speed || 1)) - elapsed)
         : Math.max(0, (clip.source_in || 0) + elapsed);
-      if (Math.abs((vid.currentTime || 0) - targetTime) > (playing ? 0.25 : 0.04)) {
+      let vid = activeVideos.get(clip.id);
+      if (!vid || vid.dataset.path !== clip.path) {
+        vid = document.createElement('video');
+        vid.dataset.path = clip.path;
+        vid.poster = thumbUrl(clip.path, 960);
+        vid.src = mediaUrl(clip.path);
+        vid.playsInline = true;
+        vid.preload = 'auto';
+        vid._targetTime = targetTime;
+        vid.addEventListener('loadedmetadata', () => {
+          try { vid.currentTime = Math.max(0.01, vid._targetTime || 0.01); } catch { }
+        }, { once: true });
+        activeVideos.set(clip.id, vid);
+      }
+      vid._targetTime = targetTime;
+      vid.muted = !!track.muted || (clip.volume === 0);
+      vid.volume = Math.min(1, Math.max(0, clip.volume ?? 1));
+      vid.playbackRate = clip.speed || 1;
+      if (vid.readyState >= 1 && Math.abs((vid.currentTime || 0) - targetTime) > (playing ? 0.25 : 0.04)) {
         try { vid.currentTime = targetTime; } catch { }
       }
       if (playing && !clip.reverse && vid.paused) vid.play().catch(() => {});
@@ -788,6 +875,8 @@ function renderStage() {
     }
     vp.appendChild(layer);
   }
+
+  positionStageGizmo(gizmoTarget, vp);
 
   vig.style.background = maxVignette > 0
     ? `radial-gradient(circle, rgba(0,0,0,0) 45%, rgba(0,0,0,${(maxVignette * 0.85).toFixed(2)}) 100%)`
@@ -820,6 +909,86 @@ function renderStage() {
     if (!activeAudIds.has(id)) { aud.pause(); activeAudios.delete(id); }
   }
 }
+
+// Canvas Transform Gizmo (drag to move, corner handle to scale)
+$('stageGizmo').addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  const hit = findClipById(selectedClipId);
+  if (!hit) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const corner = e.target.dataset.corner || null;
+  const vp = $('stageViewport');
+  const [px, py] = hit.clip.pos || (hit.clip.kind === 'text' ? [0, -0.7] : [0, 0]);
+  $('stageGizmo').setPointerCapture(e.pointerId);
+  gizmoDrag = {
+    mode: corner ? 'scale' : 'move',
+    corner,
+    id: hit.clip.id,
+    kind: hit.clip.kind,
+    startX: e.clientX,
+    startY: e.clientY,
+    vpW: vp.clientWidth || 640,
+    vpH: vp.clientHeight || 360,
+    origX: px,
+    origY: py,
+    origScale: hit.clip.scale ?? 1,
+    curX: px,
+    curY: py,
+    curScale: hit.clip.scale ?? 1,
+  };
+});
+
+window.addEventListener('pointermove', e => {
+  if (!gizmoDrag) return;
+  const dx = e.clientX - gizmoDrag.startX;
+  const dy = e.clientY - gizmoDrag.startY;
+  const layer = $(`stageViewport`).querySelector(`[data-clip-id="${gizmoDrag.id}"]`);
+  if (gizmoDrag.mode === 'move') {
+    gizmoDrag.curX = Number((gizmoDrag.origX + (dx * 2) / gizmoDrag.vpW).toFixed(3));
+    gizmoDrag.curY = Number((gizmoDrag.origY - (dy * 2) / gizmoDrag.vpH).toFixed(3));
+    if (layer) {
+      if (gizmoDrag.kind === 'text') {
+        layer.style.left = `${50 + gizmoDrag.curX * 50}%`;
+        layer.style.top = `${50 - gizmoDrag.curY * 50}%`;
+      } else {
+        const hit = findClipById(gizmoDrag.id)?.clip;
+        const fx = hit?.flip_h ? -1 : 1, fy = hit?.flip_v ? -1 : 1;
+        layer.style.transform = `translate(${gizmoDrag.curX * 50}%, ${-gizmoDrag.curY * 50}%) scale(${gizmoDrag.origScale * fx}, ${gizmoDrag.origScale * fy}) rotate(${hit?.rot ?? 0}deg)`;
+      }
+    }
+    const gizmo = $('stageGizmo');
+    const bw = gizmo.offsetWidth, bh = gizmo.offsetHeight;
+    gizmo.style.left = `${Math.round(gizmoDrag.vpW * (0.5 + gizmoDrag.curX * 0.5) - bw / 2)}px`;
+    gizmo.style.top = `${Math.round(gizmoDrag.vpH * (0.5 - gizmoDrag.curY * 0.5) - bh / 2)}px`;
+  } else {
+    const signX = gizmoDrag.corner.includes('r') ? 1 : -1;
+    const signY = gizmoDrag.corner.includes('b') ? 1 : -1;
+    const delta = (dx * signX + dy * signY) / Math.max(120, gizmoDrag.vpW);
+    gizmoDrag.curScale = Math.max(0.1, Math.min(4, Number((gizmoDrag.origScale + delta * 1.5).toFixed(3))));
+    if (layer) {
+      if (gizmoDrag.kind === 'text') {
+        const hit = findClipById(gizmoDrag.id)?.clip;
+        layer.style.transform = `translate(-50%, -50%) scale(${gizmoDrag.curScale}) rotate(${hit?.rot ?? 0}deg)`;
+      } else {
+        const hit = findClipById(gizmoDrag.id)?.clip;
+        const fx = hit?.flip_h ? -1 : 1, fy = hit?.flip_v ? -1 : 1;
+        layer.style.transform = `translate(${gizmoDrag.origX * 50}%, ${-gizmoDrag.origY * 50}%) scale(${gizmoDrag.curScale * fx}, ${gizmoDrag.curScale * fy}) rotate(${hit?.rot ?? 0}deg)`;
+      }
+    }
+  }
+});
+
+window.addEventListener('pointerup', async () => {
+  if (!gizmoDrag) return;
+  const g = gizmoDrag;
+  gizmoDrag = null;
+  if (g.mode === 'move' && (Math.abs(g.curX - g.origX) > 0.005 || Math.abs(g.curY - g.origY) > 0.005)) {
+    await runTool('edit_segments', { ids: [g.id], x: g.curX, y: g.curY }, 'Move on canvas');
+  } else if (g.mode === 'scale' && Math.abs(g.curScale - g.origScale) > 0.01) {
+    await runTool('edit_segments', { ids: [g.id], scale: g.curScale }, 'Scale on canvas');
+  }
+});
 
 function clearStageMedia() {
   for (const v of activeVideos.values()) v.pause();
@@ -1354,6 +1523,12 @@ function renderTimeline() {
     const h = trackHeight(t), tid = trackApiId(t), locked = lockedTracks.has(tid);
     const mainCls = t.is_main ? 'main-track' : '';
     const hasMute = t.type === 'video' || t.type === 'audio', hasEye = t.type !== 'audio';
+
+    if (t.is_main) {
+      hHtml += `<div style="height:18px;border-bottom:1px solid rgba(255,255,255,0.03)"></div>`;
+      lHtml += `<div class="tl-overlay-drop" id="tlOverlayDrop">+ Drop photo / video here for overlay track</div>`;
+    }
+
     hHtml += `<div class="tl-track-hdr ${mainCls}" style="height:${h}px">
       <div class="tl-hdr-btns">
         ${hasEye ? `<button class="tl-hdr-btn ${t.hidden ? 'warn' : ''}" onclick="toggleTrackHidden('${tid}', ${!t.hidden})" title="Toggle track visibility">${t.hidden ? '⊘' : '👁'}</button>` : ''}
@@ -1449,7 +1624,7 @@ async function decodeAudioPeaks(path) {
   } catch { }
 }
 
-// ---------------- Timeline Interactions & Context Menu ----------------
+// ---------------- Timeline Drop Indicators & Magnetic Reorder ----------------
 function snapPoints(excludeId) {
   const pts = [0, playheadSec];
   for (const t of overview?.tracks || [])
@@ -1473,6 +1648,146 @@ function timeAtClientX(clientX) {
   return Math.max(0, (clientX - rect.left + $('tlScroll').scrollLeft) / pxPerSec);
 }
 
+function nearestMainBoundary(sec, excludeId = null) {
+  const main = overview?.tracks?.find(t => t.is_main);
+  if (!main || !main.segments.length) return { sec: 0, slotIdx: 0, siblings: [] };
+  const siblings = main.segments.filter(s => s.id !== excludeId);
+  const boundaries = [0];
+  for (const c of siblings) boundaries.push(c.end);
+  let bestSec = boundaries[boundaries.length - 1];
+  let bestIdx = siblings.length;
+  let bestDist = Infinity;
+  for (let i = 0; i < boundaries.length; i++) {
+    const d = Math.abs(sec - boundaries[i]);
+    if (d < bestDist) { bestDist = d; bestSec = boundaries[i]; bestIdx = i; }
+  }
+  return { sec: bestSec, slotIdx: bestIdx, siblings };
+}
+
+function clearTimelineDropIndicators() {
+  $('tlDropGhost').style.display = 'none';
+  $('tlInsertBar').style.display = 'none';
+  $('tlOverlayDrop')?.classList.remove('hot');
+  document.querySelectorAll('.tl-lane.drop-target').forEach(l => l.classList.remove('drop-target'));
+  currentDropPlan = null;
+}
+
+function computeTimelineDrop(clientX, clientY, items) {
+  const tRaw = timeAtClientX(clientX);
+  const hitEl = document.elementFromPoint(clientX, clientY);
+  const overlayDrop = hitEl?.closest('#tlOverlayDrop');
+  const lane = hitEl?.closest('.tl-lane');
+  const isAudioOnly = items && items.length > 0 && items.every(x => x.kind === 'audio');
+  const ghost = $('tlDropGhost');
+  const insertBar = $('tlInsertBar');
+  const canvasRect = $('tlCanvas').getBoundingClientRect();
+
+  clearTimelineDropIndicators();
+
+  if (isAudioOnly) {
+    const snapped = applySnap(tRaw, snapPoints(null)).sec;
+    const audioLane = (lane?.dataset.type === 'audio' ? lane : null) || document.querySelector('.tl-lane[data-type="audio"]');
+    if (audioLane) {
+      audioLane.classList.add('drop-target');
+      const r = audioLane.getBoundingClientRect();
+      ghost.style.top = `${Math.round(r.top - canvasRect.top + 3)}px`;
+      ghost.style.height = `${Math.max(24, r.height - 6)}px`;
+    } else {
+      ghost.style.top = '110px';
+      ghost.style.height = '36px';
+    }
+    const dur = items.reduce((a, x) => a + (x.duration_s || 5), 0);
+    ghost.style.left = `${Math.round(snapped * pxPerSec)}px`;
+    ghost.style.width = `${Math.max(40, Math.round(dur * pxPerSec))}px`;
+    ghost.textContent = items.length > 1 ? `+ ${items.length} audio files` : `+ ${items[0].name}`;
+    ghost.style.display = 'block';
+    currentDropPlan = { mode: 'audio', sec: Number(snapped.toFixed(3)), target: 'audio' };
+    return;
+  }
+
+  if (overlayDrop || (lane && lane.dataset.type === 'video' && lane.dataset.track !== 'video#0')) {
+    const snapped = applySnap(tRaw, snapPoints(null)).sec;
+    const targetEl = overlayDrop || lane;
+    if (overlayDrop) overlayDrop.classList.add('hot');
+    else lane.classList.add('drop-target');
+    const r = targetEl.getBoundingClientRect();
+    const dur = items ? items.reduce((a, x) => a + (x.duration_s || 3), 0) : 3;
+    ghost.style.top = `${Math.round(r.top - canvasRect.top + 2)}px`;
+    ghost.style.height = `${Math.max(24, r.height - 4)}px`;
+    ghost.style.left = `${Math.round(snapped * pxPerSec)}px`;
+    ghost.style.width = `${Math.max(36, Math.round(dur * pxPerSec))}px`;
+    ghost.textContent = items ? (items.length > 1 ? `+ ${items.length} overlay clips` : `+ ${items[0].name}`) : '+ Drop as overlay';
+    ghost.style.display = 'block';
+    currentDropPlan = { mode: 'overlay', sec: Number(snapped.toFixed(3)), target: overlayDrop ? 'new_track' : 'overlay' };
+    return;
+  }
+
+  // Main Track Magnetic Insertion
+  const { sec: bSec } = nearestMainBoundary(tRaw);
+  const mainLane = document.querySelector('.tl-lane.main-track');
+  const dur = items ? items.reduce((a, x) => a + (x.duration_s || 3), 0) : 3;
+  insertBar.style.left = `${Math.round(bSec * pxPerSec)}px`;
+  insertBar.style.display = 'block';
+  if (mainLane) {
+    mainLane.classList.add('drop-target');
+    const r = mainLane.getBoundingClientRect();
+    ghost.style.top = `${Math.round(r.top - canvasRect.top + 3)}px`;
+    ghost.style.height = `${Math.max(30, r.height - 6)}px`;
+  } else {
+    ghost.style.top = '42px';
+    ghost.style.height = '48px';
+  }
+  ghost.style.left = `${Math.round(bSec * pxPerSec)}px`;
+  ghost.style.width = `${Math.max(36, Math.round(dur * pxPerSec))}px`;
+  ghost.textContent = items ? (items.length > 1 ? `+ ${items.length} clips` : `+ ${items[0].name}`) : '+ Insert here';
+  ghost.style.display = 'block';
+  currentDropPlan = { mode: 'main', sec: Number(bSec.toFixed(3)), target: 'main' };
+}
+
+$('tlScroll').addEventListener('dragover', e => {
+  const hasBin = draggingBinItems || e.dataTransfer?.types?.includes('application/x-aive-media');
+  const hasFiles = e.dataTransfer?.types?.includes('Files');
+  if (!hasBin && !hasFiles) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+  computeTimelineDrop(e.clientX, e.clientY, draggingBinItems);
+});
+
+$('tlScroll').addEventListener('dragleave', e => {
+  if (!e.relatedTarget || !e.relatedTarget.closest('#tlScroll')) {
+    clearTimelineDropIndicators();
+  }
+});
+
+$('tlScroll').addEventListener('drop', async e => {
+  const raw = e.dataTransfer?.getData('application/x-aive-media');
+  if (!raw) return; // External OS files handled by document drop handler with pendingExternalDrop
+  e.preventDefault();
+  e.stopPropagation();
+  const plan = currentDropPlan || { mode: 'main', sec: 0, target: 'main' };
+  clearTimelineDropIndicators();
+  draggingBinItems = null;
+  if (!overview) { toast('Open or create a project first'); return; }
+  try {
+    const parsed = JSON.parse(raw);
+    const items = Array.isArray(parsed) ? parsed : [parsed];
+    if (plan.mode === 'audio') {
+      let cur = plan.sec;
+      for (const it of items) {
+        await runTool('add_audio', { path: it.path, start: cur }, `Add ${it.name || 'audio'}`);
+        cur += (it.duration_s || 5);
+      }
+    } else {
+      await runTool('add_media', {
+        paths: items.map(x => x.path),
+        target: plan.target,
+        start: plan.sec,
+      }, `Add ${items.length} clip(s)`);
+    }
+  } catch { }
+});
+
+// ---------------- Timeline Pointer Interactions ----------------
 $('tlRuler').addEventListener('pointerdown', e => {
   if (e.button !== 0 || e.target.classList.contains('tl-marker')) return;
   if (playing) togglePlay();
@@ -1560,9 +1875,10 @@ $('tlLanes').addEventListener('pointerdown', e => {
   clipEl.setPointerCapture(e.pointerId);
   dragState = {
     type: trimDir ? 'trim' : 'move', trimDir, pointerId: e.pointerId, el: clipEl, id,
-    origTrack: trackId, origType: hit.track.type, origStart: hit.clip.start, origDur: hit.clip.dur,
+    origTrack: trackId, origIsMain: hit.track.is_main, origType: hit.track.type,
+    origStart: hit.clip.start, origDur: hit.clip.dur,
     startX: e.clientX, curStart: hit.clip.start, curDur: hit.clip.dur, targetTrack: trackId,
-    snapPts: snapPoints(id),
+    reorderIdx: null, snapPts: snapPoints(id),
   };
   renderTimeline();
 });
@@ -1572,26 +1888,62 @@ window.addEventListener('pointermove', e => {
   if (dragState.type === 'scrub') { seekTo(timeAtClientX(e.clientX)); return; }
   const dt = (e.clientX - dragState.startX) / pxPerSec;
   const snapLine = $('tlSnapLine');
+  const insertBar = $('tlInsertBar');
   const el = document.querySelector(`.tl-clip[data-id="${dragState.id}"]`);
   if (!el) return;
 
   if (dragState.type === 'move') {
     const rawStart = Math.max(0, dragState.origStart + dt);
-    const sStart = applySnap(rawStart, dragState.snapPts), sEnd = applySnap(rawStart + dragState.origDur, dragState.snapPts);
-    let finalStart = rawStart, snapAt = null;
-    if (sStart.snapped != null) { finalStart = sStart.sec; snapAt = sStart.snapped; }
-    else if (sEnd.snapped != null) { finalStart = Math.max(0, sEnd.sec - dragState.origDur); snapAt = sEnd.snapped; }
-    dragState.curStart = Number(finalStart.toFixed(3));
-    el.style.left = `${Math.round(finalStart * pxPerSec)}px`;
-
-    const lane = document.elementFromPoint(e.clientX, e.clientY)?.closest('.tl-lane');
+    const overEl = document.elementFromPoint(e.clientX, e.clientY);
+    const overlayDrop = overEl?.closest('#tlOverlayDrop');
+    const lane = overEl?.closest('.tl-lane');
     document.querySelectorAll('.tl-lane.drop-target').forEach(l => l.classList.remove('drop-target'));
-    if (lane && lane.dataset.type === dragState.origType && !lockedTracks.has(lane.dataset.track)) {
-      dragState.targetTrack = lane.dataset.track;
-      if (dragState.targetTrack !== dragState.origTrack) lane.classList.add('drop-target');
+    $('tlOverlayDrop')?.classList.remove('hot');
+
+    if (dragState.origIsMain && (overlayDrop || (lane && lane.dataset.type === 'video' && lane.dataset.track !== 'video#0'))) {
+      dragState.targetTrack = overlayDrop ? 'video#new' : lane.dataset.track;
+      dragState.reorderIdx = null;
+      insertBar.style.display = 'none';
+      if (overlayDrop) overlayDrop.classList.add('hot');
+      else lane.classList.add('drop-target');
+      const sStart = applySnap(rawStart, dragState.snapPts);
+      dragState.curStart = Number(sStart.sec.toFixed(3));
+      el.style.left = `${Math.round(sStart.sec * pxPerSec)}px`;
+      snapLine.style.display = sStart.snapped != null ? 'block' : 'none';
+      if (sStart.snapped != null) snapLine.style.left = `${Math.round(sStart.snapped * pxPerSec)}px`;
+    } else if (dragState.origIsMain) {
+      // Magnetic main-track reorder slot calculation
+      dragState.targetTrack = dragState.origTrack;
+      const cursorSec = timeAtClientX(e.clientX);
+      const main = overview?.tracks?.find(t => t.is_main);
+      const siblings = (main?.segments || []).filter(s => s.id !== dragState.id);
+      let slot = siblings.length;
+      for (let i = 0; i < siblings.length; i++) {
+        const mid = (siblings[i].start + siblings[i].end) / 2;
+        if (cursorSec < mid) { slot = i; break; }
+      }
+      const barSec = slot === 0 ? 0 : siblings[slot - 1].end;
+      dragState.reorderIdx = slot;
+      dragState.curStart = Number(rawStart.toFixed(3));
+      el.style.left = `${Math.round(rawStart * pxPerSec)}px`;
+      insertBar.style.left = `${Math.round(barSec * pxPerSec)}px`;
+      insertBar.style.display = 'block';
+      snapLine.style.display = 'none';
+    } else {
+      insertBar.style.display = 'none';
+      const sStart = applySnap(rawStart, dragState.snapPts), sEnd = applySnap(rawStart + dragState.origDur, dragState.snapPts);
+      let finalStart = rawStart, snapAt = null;
+      if (sStart.snapped != null) { finalStart = sStart.sec; snapAt = sStart.snapped; }
+      else if (sEnd.snapped != null) { finalStart = Math.max(0, sEnd.sec - dragState.origDur); snapAt = sEnd.snapped; }
+      dragState.curStart = Number(finalStart.toFixed(3));
+      el.style.left = `${Math.round(finalStart * pxPerSec)}px`;
+      if (lane && lane.dataset.type === dragState.origType && !lockedTracks.has(lane.dataset.track)) {
+        dragState.targetTrack = lane.dataset.track;
+        if (dragState.targetTrack !== dragState.origTrack) lane.classList.add('drop-target');
+      }
+      snapLine.style.display = snapAt != null ? 'block' : 'none';
+      if (snapAt != null) snapLine.style.left = `${Math.round(snapAt * pxPerSec)}px`;
     }
-    snapLine.style.display = snapAt != null ? 'block' : 'none';
-    if (snapAt != null) snapLine.style.left = `${Math.round(snapAt * pxPerSec)}px`;
   } else if (dragState.type === 'trim') {
     if (dragState.trimDir === 'right') {
       const s = applySnap(Math.max(dragState.origStart + 0.1, dragState.origStart + dragState.origDur + dt), dragState.snapPts);
@@ -1619,10 +1971,23 @@ window.addEventListener('pointerup', async () => {
   const ds = dragState;
   dragState = null;
   $('tlSnapLine').style.display = 'none';
+  $('tlInsertBar').style.display = 'none';
+  $('tlOverlayDrop')?.classList.remove('hot');
   document.querySelectorAll('.tl-lane.drop-target').forEach(l => l.classList.remove('drop-target'));
 
   if (ds.type === 'move') {
-    if (Math.abs(ds.curStart - ds.origStart) > 0.01 || ds.targetTrack !== ds.origTrack) {
+    if (ds.origIsMain && ds.targetTrack === ds.origTrack && ds.reorderIdx != null) {
+      const main = overview?.tracks?.find(t => t.is_main);
+      const ids = (main?.segments || []).map(s => s.id);
+      const oldIdx = ids.indexOf(ds.id);
+      if (oldIdx >= 0 && ds.reorderIdx !== oldIdx) {
+        const rest = ids.filter(x => x !== ds.id);
+        rest.splice(ds.reorderIdx, 0, ds.id);
+        await runTool('reorder_main_track', { order: rest }, 'Reorder clips');
+      } else {
+        renderTimeline();
+      }
+    } else if (Math.abs(ds.curStart - ds.origStart) > 0.01 || ds.targetTrack !== ds.origTrack) {
       const args = { id: ds.id, start: ds.curStart };
       if (ds.targetTrack !== ds.origTrack) args.to_track = ds.targetTrack;
       await runTool('move_segment', args, 'Move clip');
@@ -1634,22 +1999,6 @@ window.addEventListener('pointerup', async () => {
       await runTool('edit_segments', args, 'Trim clip');
     }
   }
-});
-
-$('tlLanes').addEventListener('dragover', e => {
-  if (e.dataTransfer?.types?.includes('application/x-aive-media')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }
-});
-$('tlLanes').addEventListener('drop', async e => {
-  const raw = e.dataTransfer?.getData('application/x-aive-media');
-  if (!raw) return;
-  e.preventDefault();
-  try {
-    const { path, kind } = JSON.parse(raw);
-    const t = timeAtClientX(e.clientX);
-    const lane = e.target.closest('.tl-lane');
-    const target = lane && lane.dataset.track !== 'video#0' ? 'new_track' : 'main';
-    await quickAddMedia(path, kind, Number(t.toFixed(2)), target);
-  } catch { }
 });
 
 // ---------------- Timeline & Clip Editing Actions ----------------
@@ -1848,6 +2197,7 @@ async function openProject(path) {
     const ov = await api.open_project(path);
     currentProjectPath = path;
     localMediaPool = [];
+    selectedBinPaths.clear();
     catalogCache = {};
     selectSingleClip(null);
     playheadSec = 0;
@@ -1861,7 +2211,7 @@ async function openProject(path) {
 async function openFile() {
   try {
     const ov = await api.open_file();
-    if (ov) { localMediaPool = []; catalogCache = {}; selectSingleClip(null); playheadSec = 0; applyOverview(ov); loadProjects(); if (binTab === 'projects') setBinTab('media'); }
+    if (ov) { localMediaPool = []; selectedBinPaths.clear(); catalogCache = {}; selectSingleClip(null); playheadSec = 0; applyOverview(ov); loadProjects(); if (binTab === 'projects') setBinTab('media'); }
   } catch (e) { toast(e.message || String(e)); }
 }
 
@@ -1872,7 +2222,7 @@ async function createProject() {
   hideModal('mNew');
   try {
     const ov = await api.new_project(n, $('newRatio').value);
-    localMediaPool = []; catalogCache = {}; selectSingleClip(null); playheadSec = 0;
+    localMediaPool = []; selectedBinPaths.clear(); catalogCache = {}; selectSingleClip(null); playheadSec = 0;
     applyOverview(ov); await loadProjects();
     if (binTab === 'projects') setBinTab('media');
     toast(`Created "${ov.project}"`);
@@ -1930,7 +2280,33 @@ async function saveSettings() {
   } catch (e) { toast(e.message || String(e)); }
 }
 
-// ---------------- Host Push Events & Drag/Drop ----------------
+// ---------------- Host Push Events & External Explorer Drop ----------------
+async function handleExternalTimelineDrop(paths, dropMeta) {
+  const probed = await api.probe_media(paths);
+  if (!probed || !probed.length) { toast('No supported media files found'); return; }
+  const map = new Map(localMediaPool.map(x => [x.path.toLowerCase(), x]));
+  for (const item of probed) {
+    const k = item.path.toLowerCase();
+    if (!map.has(k)) map.set(k, { ...item, in_timeline: false });
+  }
+  localMediaPool = Array.from(map.values());
+  const visual = probed.filter(x => x.kind !== 'audio');
+  const audio = probed.filter(x => x.kind === 'audio');
+  if (visual.length) {
+    await runTool('add_media', {
+      paths: visual.map(x => x.path),
+      target: dropMeta.target === 'overlay' || dropMeta.target === 'new_track' ? dropMeta.target : 'main',
+      start: dropMeta.sec ?? 0,
+    }, `Drop ${visual.length} media file(s)`);
+  }
+  let audStart = dropMeta.sec ?? 0;
+  for (const a of audio) {
+    await runTool('add_audio', { path: a.path, start: audStart }, `Drop ${a.name}`);
+    audStart += (a.duration_s || 5);
+  }
+  if (!visual.length && !audio.length) renderBin();
+}
+
 function onEvent(kind, data) {
   if (kind === 'assistant') addChat('chat-msg bot', esc(data));
   else if (kind === 'tool') {
@@ -1944,24 +2320,42 @@ function onEvent(kind, data) {
     if (appState) { appState.provider = data.id; const p = provInfo(data.id); if (p) p.hasKey = true; renderTopStatus(); }
   }
   else if (kind === 'dropped') {
+    const meta = pendingExternalDrop;
+    pendingExternalDrop = null;
     if (data?.length) {
-      if (inspTab === 'editpilot') insertChatText(data.map(f => `"${f}"`).join(' '));
+      if (meta?.zone === 'timeline' && overview) handleExternalTimelineDrop(data, meta);
+      else if (meta?.zone === 'chat' || inspTab === 'editpilot') insertChatText(data.map(f => `"${f}"`).join(' '));
       else probeAndAddToBin(data);
     }
   }
   else if (kind === 'update') { updUrl = data.url; const b = $('updBtn'); b.textContent = `⬆ v${data.version} available`; b.style.display = ''; }
-  else if (kind === 'project') { currentProjectPath = data.path; localMediaPool = []; catalogCache = {}; selectSingleClip(null); playheadSec = 0; refreshOverview(); loadProjects(); }
+  else if (kind === 'project') { currentProjectPath = data.path; localMediaPool = []; selectedBinPaths.clear(); catalogCache = {}; selectSingleClip(null); playheadSec = 0; refreshOverview(); loadProjects(); }
   else if (kind === 'done') { setBusy(false); refreshOverview(); }
 }
 
-document.addEventListener('dragover', e => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); document.body.classList.add('dragging'); } });
-document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('dragging'); });
+document.addEventListener('dragover', e => {
+  if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); document.body.classList.add('dragging'); }
+});
+document.addEventListener('dragleave', e => {
+  if (!e.relatedTarget) { document.body.classList.remove('dragging'); clearTimelineDropIndicators(); }
+});
 document.addEventListener('drop', e => {
   if (!e.dataTransfer?.files?.length) return;
   e.preventDefault();
   document.body.classList.remove('dragging');
+  const inTimeline = !!e.target.closest('#tlScroll, #timelineDock');
+  const inChat = !!e.target.closest('#inspChat');
+  if (inTimeline) {
+    const plan = currentDropPlan || { mode: 'main', sec: 0, target: 'main' };
+    pendingExternalDrop = { zone: 'timeline', ...plan };
+  } else if (inChat) {
+    pendingExternalDrop = { zone: 'chat' };
+  } else {
+    pendingExternalDrop = { zone: 'bin' };
+  }
+  clearTimelineDropIndicators();
   try { window.chrome.webview.postMessageWithAdditionalObjects({ method: 'dropped' }, e.dataTransfer.files); }
-  catch { toast('Drop local files or folders from Windows Explorer'); }
+  catch { pendingExternalDrop = null; toast('Drop local files or folders from Windows Explorer'); }
 });
 
 ['mSettings', 'mNew', 'mRun', 'mExport'].forEach(id =>

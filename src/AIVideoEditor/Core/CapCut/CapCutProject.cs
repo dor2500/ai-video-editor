@@ -287,7 +287,10 @@ public sealed class CapCutProject : EditorProject
         }
         var w = (int)c.Long("width", 1920);
         var h = (int)c.Long("height", 1080);
-        var ratio = c.Str("ratio") is { Length: > 0 } r ? r : "16:9";
+        var rawRatio = c.Str("ratio");
+        var ratio = string.IsNullOrEmpty(rawRatio) || rawRatio.Equals("original", StringComparison.OrdinalIgnoreCase)
+            ? T.Ratio(w, h)
+            : rawRatio;
         return new JsonObject
         {
             ["editor"] = "CapCut", ["project"] = Name, ["duration_s"] = T.Sec(d.Long("duration")),
