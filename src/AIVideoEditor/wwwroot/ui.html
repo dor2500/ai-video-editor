@@ -1,400 +1,362 @@
 <!doctype html>
-<html lang="he" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Video Editor</title>
-<style>
-:root{
-  --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a; --text:#e8eaf0; --muted:#8b93a7;
-  --accent:#22d3c5; --accent2:#0ea5a0; --user:#1f3a5f; --warn:#f59e0b; --err:#ef4444;
-  --k-video:#3b82f6; --k-photo:#8b5cf6; --k-audio:#10b981; --k-text:#f59e0b; --k-effect:#ec4899;
-}
-*{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.5 "Segoe UI","Arial",sans-serif}
-button{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;white-space:nowrap}
-button:hover{border-color:var(--accent)}
-button.primary{background:var(--accent2);border-color:var(--accent2);color:#fff;font-weight:600}
-button.primary:hover{background:var(--accent)}
-button:disabled{opacity:.45;cursor:default}
-input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
-select{cursor:pointer}
-.app{display:grid;grid-template-columns:270px 1fr;height:100vh}
-aside{background:var(--panel);border-inline-end:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
-aside h2{font-size:12px;color:var(--muted);margin:14px 14px 6px;font-weight:600;letter-spacing:.3px}
-.edsel{margin:0 12px;display:flex;flex-direction:column;gap:6px}
-.edsel select{width:100%}
-.hint{font-size:12px;color:var(--muted);margin:2px 2px 0}
-.plist{overflow:auto;flex:1;padding:4px 8px 8px}
-.pitem{padding:8px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}
-.pitem span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pitem:hover{background:var(--panel2)}
-.pitem.on{background:#13343a;outline:1px solid var(--accent2)}
-.pitem small{color:var(--muted);flex:none}
-.side-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px;border-top:1px solid var(--line)}
-.side-btns button.wide{grid-column:1 / -1}
-main{display:flex;flex-direction:column;min-width:0;min-height:0}
-header{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
-header .title{font-weight:700;font-size:16px;flex:1;min-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pill{font-size:12px;padding:3px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
-.pill.run{color:var(--warn);border-color:var(--warn)}
-.pill.ok{color:var(--accent);border-color:var(--accent2)}
-.timeline{padding:8px 16px;border-bottom:1px solid var(--line);background:#12151b;max-height:170px;overflow:auto}
-.trow{display:flex;align-items:center;gap:8px;height:20px;margin:3px 0}
-.tlabel{width:70px;font-size:11px;color:var(--muted);direction:ltr;text-align:left;flex:none}
-.tbar{position:relative;flex:1;height:16px;background:#0b0d11;border-radius:4px;direction:ltr}
-.seg{position:absolute;top:1px;height:14px;border-radius:3px;opacity:.9;font-size:9px;color:#fff;overflow:hidden;white-space:nowrap;padding:0 3px;border-inline:1px solid #0008}
-.tinfo{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;margin-bottom:4px}
-.chat{flex:1;overflow:auto;padding:18px 18px 8px;display:flex;flex-direction:column;gap:10px}
-.msg{max-width:80%;padding:10px 14px;border-radius:14px;white-space:pre-wrap;word-wrap:break-word}
-.msg.user{align-self:flex-start;background:var(--user);border-end-start-radius:4px}
-.msg.bot{align-self:flex-end;background:var(--panel2);border:1px solid var(--line);border-end-end-radius:4px}
-.msg.err{align-self:center;background:#3a1416;border:1px solid var(--err);color:#fecaca}
-.msg.sys{align-self:center;color:var(--muted);font-size:12px;background:none;padding:2px;text-align:center}
-.tool{align-self:flex-end;font-size:12px;color:var(--muted);background:#141821;border:1px dashed var(--line);border-radius:8px;padding:3px 10px;max-width:80%;cursor:pointer}
-.tool pre{display:none;margin:4px 0 0;direction:ltr;text-align:left;white-space:pre-wrap;font-size:11px}
-.tool.open pre{display:block}
-.typing{align-self:flex-end;color:var(--muted);font-size:13px}
-.typing span{animation:blink 1.2s infinite}
-.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
-@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
-.composer{border-top:1px solid var(--line);padding:10px 16px 14px;background:var(--panel)}
-.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
-.chip{font-size:12px;padding:3px 10px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);cursor:pointer;color:var(--muted)}
-.chip:hover{color:var(--text);border-color:var(--accent2)}
-.row{display:flex;gap:8px;align-items:flex-end}
-textarea{flex:1;resize:none;min-height:44px;max-height:180px}
-.modal-bg{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:9;padding:16px}
-.modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;width:min(520px,100%);max-height:100%;overflow:auto}
-.modal h3{margin:0 0 8px}
-.modal p{color:var(--muted);margin:6px 0 12px}
-.modal label{display:block;margin:12px 0 4px;font-size:13px;color:var(--muted)}
-.modal .btns{display:flex;gap:8px;justify-content:flex-start;flex-wrap:wrap;margin-top:16px}
-.modal input,.modal select{width:100%}
-.seg-tabs{display:flex;gap:6px}
-.seg-tabs button{flex:1}
-.seg-tabs button.on{background:#13343a;border-color:var(--accent2);color:var(--accent)}
-.keyrow{display:flex;gap:6px}
-.keyrow input{flex:1}
-a{color:var(--accent);cursor:pointer}
-.empty{margin:auto;text-align:center;color:var(--muted);max-width:560px}
-.empty h1{color:var(--text);font-size:22px;margin-bottom:6px}
-body.dragging .composer{outline:2px dashed var(--accent);outline-offset:-6px}
-body.dragging .composer::before{content:'שחרר כאן כדי לצרף את הקבצים';display:block;color:var(--accent);margin-bottom:6px}
-@media (max-width:900px){.app{grid-template-columns:210px 1fr}}
-</style>
+<link rel="stylesheet" href="https://aive.local/styles.css">
 </head>
 <body>
-<div class="app">
-  <aside>
-    <h2>תוכנת העריכה</h2>
-    <div class="edsel">
-      <select id="editor"></select>
-      <div class="hint" id="edhint"></div>
-    </div>
-    <h2>הפרויקטים</h2>
-    <div class="plist" id="plist"></div>
-    <div class="side-btns">
-      <button onclick="showNewProject()">＋ חדש</button>
-      <button onclick="openFile()">📂 פתח קובץ</button>
-      <button onclick="loadProjects()">⟳ רענן</button>
-      <button onclick="showSettings()">⚙ הגדרות</button>
-    </div>
-  </aside>
-  <main>
-    <header>
-      <div class="title" id="ptitle">לא נבחר פרויקט</div>
-      <button class="primary" id="updBtn" style="display:none" onclick="api.open_url(updUrl)"></button>
-      <span class="pill" id="provpill" title="מודל ה-AI">AI: ?</span>
-      <span class="pill" id="edstatus" style="display:none"></span>
-      <button onclick="closeEditor()" id="btnClose" style="display:none">סגור</button>
-      <button onclick="openEditor()" id="btnOpen">▶ פתח בתוכנה</button>
-      <button onclick="reveal()" title="הצג את קובץ הפרויקט בתיקייה">📁</button>
-      <button onclick="doUndo()" title="בטל את הבקשה האחרונה">↶ בטל</button>
-      <button onclick="newChat()" title="שיחה חדשה (הפרויקט לא משתנה)">🗨</button>
-    </header>
-    <div class="timeline" id="timeline" style="display:none"></div>
-    <div class="chat" id="chat">
-      <div class="empty" id="empty">
-        <h1>עורך הווידאו החכם שלך 🎬</h1>
-        <p>בחר תוכנת עריכה ופרויקט (או צור חדש) וכתוב מה לעשות, למשל:<br>
-        „קח את כל התמונות מהתיקייה <i>C:\Users\...\Pictures\טיול</i>, 4 שניות לכל תמונה, עם זום עדין ומעברי דהייה”<br>
-        „תוסיף את השיר מההורדות לכל אורך הסרטון עם fade בסוף”<br>
-        „תזיז את הכותרת למעלה ותגדיל אותה”</p>
+<div class="app-shell">
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="tb-left">
+      <div class="brand">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00d2c8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 7l8 5-8 5V7z"/><path d="M13 7l7 5-7 5"/>
+        </svg>
+        <span>AI Video Editor</span>
+      </div>
+      <div class="menu-wrap">
+        <button class="ghost" id="btnMenu" onclick="toggleMenu()">Menu ▾</button>
+        <div class="dropdown" id="topMenu">
+          <button onclick="closeMenu(); showNewProject()">+ New Project</button>
+          <button onclick="closeMenu(); openFile()">Open Project File...</button>
+          <button onclick="closeMenu(); setBinTab('projects')">Switch Editor / Project</button>
+          <hr>
+          <button onclick="closeMenu(); showSettings()">AI Provider Settings</button>
+          <button onclick="closeMenu(); api.reveal()">Reveal Project in Explorer</button>
+        </div>
+      </div>
+      <div class="autosave" id="autoSaveLabel">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M20 6L9 17l-5-5"/></svg>
+        <span>Ready</span>
       </div>
     </div>
-    <div class="composer">
-      <div class="chips">
-        <span class="chip" onclick="attachFolder()">📁 צרף תיקייה</span>
-        <span class="chip" onclick="attachFiles()">📎 צרף קבצים</span>
-        <span class="chip" onclick="quick('מה יש כרגע בפרויקט? תן סיכום קצר')">מה יש בפרויקט?</span>
-        <span class="chip" onclick="quick('תוסיף מעבר דהייה עדין בין כל הקליפים בטראק הראשי')">מעברים לכולם</span>
-        <span class="chip" onclick="quick('תוסיף תנועת זום/פאן עדינה לכל התמונות (Ken Burns), מתחלפת')">זום לתמונות</span>
-        <span class="chip" onclick="quick('תשתיק את הסאונד המקורי של הסרטונים בטראק הראשי')">השתק סאונד מקורי</span>
+
+    <div class="tb-center">
+      <button class="project-title-btn" id="ptitle" onclick="setBinTab('projects')" title="Switch project">No Project Open</button>
+    </div>
+
+    <div class="tb-right">
+      <button class="cyan" id="updBtn" style="display:none" onclick="api.open_url(updUrl)"></button>
+      <span class="pill" id="edstatus" style="display:none" onclick="pollEditor()"></span>
+      <button id="btnCloseEditor" style="display:none" onclick="closeEditor()">Close Editor</button>
+      <span class="pill" id="provpill" onclick="showSettings()" title="Configure AI provider and key">AI: ?</span>
+      <button id="btnOpenEditor" onclick="openEditor()">Open in Editor</button>
+      <button class="cyan export-btn" onclick="exportProject()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3v12m0-12l-4 4m4-4l4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        Export
+      </button>
+    </div>
+  </header>
+
+  <!-- Upper 3-Pane Workspace -->
+  <div class="workspace" id="workspace">
+    <!-- Left Media & Asset Bin -->
+    <section class="pane">
+      <div class="bin-tabs" id="binTabs">
+        <button class="bin-tab active" data-tab="media" onclick="setBinTab('media')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 9l5 3-5 3V9z"/></svg>
+          <span>Media</span>
+        </button>
+        <button class="bin-tab" data-tab="audio" onclick="setBinTab('audio')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          <span>Audio</span>
+        </button>
+        <button class="bin-tab" data-tab="text" onclick="setBinTab('text')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+          <span>Text</span>
+        </button>
+        <button class="bin-tab" data-tab="effects" onclick="setBinTab('effects')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3l2.2 4.5L19 9.7l-4.8 2.2L12 16.5l-2.2-4.6L5 9.7l4.8-2.2L12 3z"/></svg>
+          <span>Effects</span>
+        </button>
+        <button class="bin-tab" data-tab="transitions" onclick="setBinTab('transitions')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 6l8 6-8 6V6zM20 6l-8 6 8 6V6z"/></svg>
+          <span>Transitions</span>
+        </button>
+        <button class="bin-tab" data-tab="filters" onclick="setBinTab('filters')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8" r="5"/><circle cx="8" cy="15" r="5"/><circle cx="16" cy="15" r="5"/></svg>
+          <span>Filters</span>
+        </button>
+        <button class="bin-tab" data-tab="projects" onclick="setBinTab('projects')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+          <span>Projects</span>
+        </button>
       </div>
-      <div class="row">
-        <textarea id="input" rows="2" placeholder="כתוב מה לערוך… אפשר גם לגרור לכאן תמונות, סרטונים, שירים או תיקייה  (Enter לשליחה)"></textarea>
-        <button class="primary" id="send" onclick="send()">שלח</button>
-        <button id="stop" onclick="api.stop()" style="display:none">עצור</button>
+
+      <div class="bin-body" id="binBody"></div>
+
+      <div class="bin-footer">
+        <div class="bin-footer-left">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#00d2c8" stroke-width="2"><path d="M12 3l1.9 4.2L18 9l-4.1 1.8L12 15l-1.9-4.2L6 9l4.1-1.8L12 3z"/></svg>
+          <span>AI Clipper</span>
+          <span style="color:var(--text-muted);font-weight:400">Describe edits in natural language</span>
+        </div>
+        <button class="cyan" style="padding:3px 9px;font-size:11px" onclick="openEditPilot()">EditPilot</button>
+      </div>
+    </section>
+
+    <!-- Center Preview Stage -->
+    <section class="pane">
+      <div class="stage-head">
+        <span id="stageTitle">Player · Timeline 01</span>
+        <span id="stageMeta" style="color:var(--text-muted)">1920×1080 · 30fps</span>
+      </div>
+      <div class="stage-canvas-wrap" id="stageWrap">
+        <div class="stage-viewport" id="stageViewport">
+          <div class="stage-empty" id="stageEmpty">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 9l5 3-5 3V9z"/></svg>
+            <div>Open a project or import media to preview</div>
+          </div>
+          <div class="safe-grid" id="safeGrid"></div>
+        </div>
+      </div>
+      <div class="stage-controls">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="tc-readout"><span class="cur" id="tcCur">00:00:00:00</span> / <span id="tcTot">00:00:00:00</span></div>
+          <button class="icon-btn" id="btnGrid" onclick="toggleGrid()" title="Toggle safe zone grid">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+          </button>
+        </div>
+        <div class="transport-center">
+          <button class="icon-btn" onclick="seekTo(0)" title="Jump to start">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zm3.5 7l9 6V6z"/></svg>
+          </button>
+          <button class="icon-btn" onclick="stepFrames(-1)" title="Previous frame (Left Arrow)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6l-8 6 8 6V6z"/></svg>
+          </button>
+          <button class="play-btn" id="btnPlay" onclick="togglePlay()" title="Play / Pause (Space)">
+            <svg id="playIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <button class="icon-btn" onclick="stepFrames(1)" title="Next frame (Right Arrow)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M9 6l8 6-8 6V6z"/></svg>
+          </button>
+          <button class="icon-btn" onclick="seekTo(projectDuration())" title="Jump to end">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM5.5 18l9-6-9-6z"/></svg>
+          </button>
+        </div>
+        <div class="transport-right">
+          <select id="stageZoom" onchange="layoutStage()" title="Preview zoom">
+            <option value="fit">Fit</option>
+            <option value="0.75">75%</option>
+            <option value="0.5">50%</option>
+          </select>
+          <select id="ratioSelect" onchange="changeCanvasRatio(this.value)" title="Canvas aspect ratio">
+            <option value="16:9">16:9</option>
+            <option value="9:16">9:16</option>
+            <option value="1:1">1:1</option>
+            <option value="4:5">4:5</option>
+            <option value="4:3">4:3</option>
+            <option value="21:9">21:9</option>
+          </select>
+          <button class="icon-btn" onclick="toggleFullscreenStage()" title="Toggle fullscreen preview">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Inspector & EditPilot -->
+    <section class="pane">
+      <div class="insp-tabs">
+        <button class="insp-tab active" data-tab="project" onclick="setInspTab('project')">Project</button>
+        <button class="insp-tab" data-tab="details" onclick="setInspTab('details')">Details</button>
+        <button class="insp-tab" data-tab="editpilot" onclick="setInspTab('editpilot')">EditPilot</button>
+      </div>
+      <div class="insp-body" id="inspProject"></div>
+      <div class="insp-body" id="inspDetails" style="display:none"></div>
+      <div class="chat-pane" id="inspChat" style="display:none">
+        <div class="chat-head">
+          <span>EditPilot AI Assistant</span>
+          <button class="ghost" style="padding:2px 7px;font-size:11px" onclick="newChat()">New Chat</button>
+        </div>
+        <div class="chat-log" id="chatLog">
+          <div class="chat-msg sys" id="chatWelcome">Ask EditPilot to assemble clips, add music, titles, transitions, Ken Burns motion, or color filters.</div>
+        </div>
+        <div class="composer">
+          <div class="chips">
+            <span class="chip" onclick="attachFolder()">+ Folder</span>
+            <span class="chip" onclick="attachFiles()">+ Files</span>
+            <span class="chip" onclick="quickPrompt('Give me a concise summary of what is in this project')">Summarize</span>
+            <span class="chip" onclick="quickPrompt('Add subtle Cross Dissolve transitions between all clips on the main track')">Transitions</span>
+            <span class="chip" onclick="quickPrompt('Add alternating Ken Burns motion to all photos on the main track')">Ken Burns</span>
+            <span class="chip" onclick="quickPrompt('Mute the original audio of the main video track')">Mute Video</span>
+          </div>
+          <div class="composer-row">
+            <textarea id="chatInput" rows="2" placeholder="Describe edits or drop files/folders here (Enter to send)..."></textarea>
+            <button class="cyan" id="btnSend" onclick="sendChat()">Send</button>
+            <button id="btnStop" onclick="api.stop()" style="display:none">Stop</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Resizer -->
+  <div class="h-splitter" id="hSplitter" title="Drag to resize timeline height"></div>
+
+  <!-- Bottom Multi-Track Timeline -->
+  <section class="timeline-dock" id="timelineDock">
+    <div class="tl-toolbar">
+      <div class="tl-tools-left">
+        <button class="icon-btn" onclick="importMediaFiles()" title="Import media to bin">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="icon-btn active" id="btnModeSelect" onclick="setToolMode('select')" title="Select / Move tool (V)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-7 1-3 7-4-17z"/></svg>
+        </button>
+        <button class="icon-btn" id="btnModeBlade" onclick="setToolMode('blade')" title="Blade / Split tool (C)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 5L5 19M14 4l6 6M9 15l-5 5"/></svg>
+        </button>
+        <div class="tl-sep"></div>
+        <button class="icon-btn" id="btnUndo" onclick="doUndo()" title="Undo (Ctrl+Z)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+        </button>
+        <button class="icon-btn" id="btnRedo" onclick="doRedo()" title="Redo (Ctrl+Y)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+        </button>
+        <button class="icon-btn" onclick="splitAtPlayhead()" title="Split clip at playhead (Ctrl+B)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M4 7h4v10H4M20 7h-4v10h4"/></svg>
+        </button>
+        <button class="icon-btn" onclick="trimToPlayhead('left')" title="Trim clip start to playhead">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4v16M9 12h11M13 8l-4 4 4 4"/></svg>
+        </button>
+        <button class="icon-btn" onclick="trimToPlayhead('right')" title="Trim clip end to playhead">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 4v16M15 12H4M11 8l4 4-4 4"/></svg>
+        </button>
+        <button class="icon-btn" onclick="deleteSelected()" title="Delete selected clip (Del)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0v14h10V6"/></svg>
+        </button>
+        <div class="tl-sep"></div>
+        <button class="icon-btn" onclick="addMarkerAtPlayhead()" title="Add timeline marker (M)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l6 6-6 12-6-12 6-6z"/></svg>
+        </button>
+        <button class="icon-btn" onclick="closeMainGaps()" title="Close gaps on main track">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h6m6 0h6M9 8l3 4-3 4M15 8l-3 4 3 4"/></svg>
+        </button>
+      </div>
+
+      <div class="tl-tools-right">
+        <button class="icon-btn active" id="btnRipple" onclick="toggleRipple()" title="Ripple delete on main track">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h6v10H4zM14 7h6v10h-6zM10 12h4"/></svg>
+        </button>
+        <button class="icon-btn active" id="btnSnap" onclick="toggleSnap()" title="Magnetic snapping to clips & playhead">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 15V9a6 6 0 0 1 12 0v6M6 15h4v3H6zM14 15h4v3h-4z"/></svg>
+        </button>
+        <div class="tl-sep"></div>
+        <button class="icon-btn" onclick="fitTimeline()" title="Fit entire project in timeline">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        </button>
+        <button class="icon-btn" onclick="zoomTimeline(-1)" title="Zoom out">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M21 21l-4.3-4.3"/></svg>
+        </button>
+        <input class="tl-zoom-slider" id="zoomSlider" type="range" min="4" max="240" value="36" oninput="setZoom(Number(this.value))">
+        <button class="icon-btn" onclick="zoomTimeline(1)" title="Zoom in">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M11 8v6M8 11h6M21 21l-4.3-4.3"/></svg>
+        </button>
       </div>
     </div>
-  </main>
+
+    <div class="tl-body">
+      <div class="tl-headers">
+        <div class="tl-headers-corner">Tracks</div>
+        <div class="tl-header-list" id="tlHeaderList"></div>
+      </div>
+      <div class="tl-scroll" id="tlScroll">
+        <div class="tl-canvas" id="tlCanvas">
+          <div class="tl-ruler" id="tlRuler"></div>
+          <div class="tl-lanes" id="tlLanes"></div>
+          <div class="tl-snap-line" id="tlSnapLine"></div>
+          <div class="tl-playhead" id="tlPlayhead">
+            <div class="tl-playhead-handle" id="tlPlayheadHandle"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
 
-<div class="modal-bg" id="mSettings"><div class="modal">
-  <h3>הגדרות AI</h3>
-  <p>בחר שירות AI והזן מפתח API. השירותים המסומנים <b>חינם</b> לא דורשים כרטיס אשראי. המפתחות נשמרים מוצפנים רק במחשב הזה.</p>
-  <label>שירות</label>
-  <select id="provSel" onchange="pickProvider(this.value)"></select>
-  <div class="hint" id="provNote" style="margin-top:6px"></div>
-  <label id="keyLabel">מפתח API</label>
-  <input id="provKey" type="password" placeholder="">
-  <label>מודל</label>
-  <div class="keyrow"><select id="provModel"><option value="">(אוטומטי)</option></select><button onclick="loadModels()">טען רשימה</button></div>
-  <div class="btns"><button class="primary" onclick="saveSettings()">שמור</button><button onclick="hide('mSettings')">ביטול</button></div>
-</div></div>
+<!-- Floating EditPilot Pill -->
+<button class="editpilot-fab" id="editPilotFab" onclick="openEditPilot()">
+  <span class="editpilot-dot">✦</span>
+  <span>EditPilot</span>
+</button>
 
-<div class="modal-bg" id="mNew"><div class="modal">
-  <h3>פרויקט חדש</h3>
-  <input id="newName" placeholder="שם הפרויקט">
-  <label>יחס מסך</label>
-  <select id="newRatio"><option value="16:9">16:9 – רחב (YouTube)</option><option value="9:16">9:16 – לאורך (TikTok/Reels)</option><option value="1:1">1:1 – ריבוע</option><option value="4:5">4:5 – אינסטגרם</option></select>
-  <div class="btns"><button class="primary" onclick="createProject()">צור</button><button onclick="hide('mNew')">ביטול</button></div>
-</div></div>
+<div class="toast" id="toast"></div>
 
-<div class="modal-bg" id="mRun"><div class="modal">
-  <h3 id="runTitle">התוכנה פתוחה</h3>
-  <p id="runText">כשהתוכנה פתוחה היא עלולה לדרוס את השינויים. לסגור אותה לפני העריכה?</p>
-  <div class="btns">
-    <button class="primary" onclick="runChoice('close')">סגור והמשך</button>
-    <button onclick="runChoice('go')">המשך בכל זאת</button>
-    <button onclick="runChoice('cancel')">ביטול</button>
+<!-- Settings Modal -->
+<div class="modal-bg" id="mSettings">
+  <div class="modal">
+    <h3>AI Provider Settings</h3>
+    <p>Choose an AI provider and enter your API key. Keys are encrypted locally with Windows DPAPI.</p>
+    <label>Provider</label>
+    <select id="provSel" onchange="pickProvider(this.value)"></select>
+    <div id="provNote" style="font-size:11px;color:var(--text-muted)"></div>
+    <label id="keyLabel">API Key</label>
+    <input id="provKey" type="password" placeholder="Paste API key">
+    <label>Model</label>
+    <div class="keyrow">
+      <select id="provModel"><option value="">(Automatic - best available)</option></select>
+      <button onclick="loadModels()">Refresh Models</button>
+    </div>
+    <div class="modal-btns">
+      <button onclick="hideModal('mSettings')">Cancel</button>
+      <button class="cyan" onclick="saveSettings()">Save</button>
+    </div>
   </div>
-</div></div>
+</div>
 
-<script>
-// ---- bridge to the .NET host (WebView2 postMessage)
-const pending = new Map(); let seq = 0;
-const api = new Proxy({}, { get: (_, method) => (...args) => new Promise((resolve, reject) => {
-  const id = ++seq; pending.set(id, { resolve, reject });
-  window.chrome.webview.postMessage({ id, method, args });
-}) });
-window.chrome.webview.addEventListener('message', e => {
-  const m = e.data;
-  if (m && m.event) { onEvent(m.event, m.data); return; }
-  const p = pending.get(m.id); if (!p) return; pending.delete(m.id);
-  m.error ? p.reject(new Error(m.error)) : p.resolve(m.result);
-});
+<!-- New Project Modal -->
+<div class="modal-bg" id="mNew">
+  <div class="modal">
+    <h3>New Project</h3>
+    <label>Project Name</label>
+    <input id="newName" placeholder="My Video Project">
+    <label>Aspect Ratio</label>
+    <select id="newRatio">
+      <option value="16:9">16:9 - Landscape (YouTube)</option>
+      <option value="9:16">9:16 - Vertical (Shorts / Reels / TikTok)</option>
+      <option value="1:1">1:1 - Square</option>
+      <option value="4:5">4:5 - Portrait</option>
+      <option value="4:3">4:3 - Classic</option>
+      <option value="21:9">21:9 - Ultrawide</option>
+    </select>
+    <div class="modal-btns">
+      <button onclick="hideModal('mNew')">Cancel</button>
+      <button class="cyan" onclick="createProject()">Create</button>
+    </div>
+  </div>
+</div>
 
-let updUrl = '', state = null, current = null, busy = false, pendingText = null, typingEl = null, provider = 'claude';
-const $ = id => document.getElementById(id);
-const COLORS = {video:'var(--k-video)', photo:'var(--k-photo)', audio:'var(--k-audio)', text:'var(--k-text)', filter:'var(--k-effect)', video_effect:'var(--k-effect)', effect:'var(--k-effect)'};
-const TOOL_HE = {get_project_overview:'קורא את הפרויקט', list_folder_media:'סורק תיקייה', look_at_images:'מסתכל על תמונות', add_media:'מוסיף תמונות/סרטונים', add_audio:'מוסיף סאונד', add_text:'מוסיף טקסט', edit_segments:'עורך קטעים', move_segment:'מזיז קטע', delete_segments:'מוחק קטעים', split_segment:'חותך קטע', reorder_main_track:'מסדר מחדש', close_gaps:'סוגר רווחים', set_track_mute:'משתיק/מבטל השתקה', set_canvas:'משנה יחס מסך', search_catalog:'מחפש אפקט', set_transitions:'מוסיף מעברים', set_animations:'מוסיף אנימציה', add_motion:'מוסיף תנועה (זום/פאן)', add_filter_or_effect:'מוסיף פילטר/אפקט', set_audio_fade:'מגדיר fade', undo_last_request:'מבטל', list_projects:'רשימת פרויקטים', switch_project:'מחליף פרויקט', create_project:'יוצר פרויקט'};
-const DIRECT = ['capcut','shotcut','openshot'];
+<!-- Running Editor Warning Modal -->
+<div class="modal-bg" id="mRun">
+  <div class="modal">
+    <h3 id="runTitle">Editor is Running</h3>
+    <p id="runText">When the editor is open, it may overwrite project changes on disk. Close it before editing?</p>
+    <div class="modal-btns">
+      <button onclick="runChoice('cancel')">Cancel</button>
+      <button onclick="runChoice('go')">Continue Anyway</button>
+      <button class="cyan" onclick="runChoice('close')">Close &amp; Continue</button>
+    </div>
+  </div>
+</div>
 
-function hide(id){ $(id).style.display='none' }
-function show(id){ $(id).style.display='flex' }
-function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])) }
-function scrollDown(){ const c=$('chat'); c.scrollTop=c.scrollHeight }
-function add(cls, html){ $('empty') && $('empty').remove(); const d=document.createElement('div'); d.className=cls; d.innerHTML=html; if(typingEl && typingEl.parentNode){ $('chat').insertBefore(d, typingEl) } else $('chat').appendChild(d); scrollDown(); return d }
-function fmtTime(s){ s=Math.round(s||0); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0') }
-function edInfo(){ return state?.editors.find(e => e.id === state.editor) }
-function errMsg(e){ return esc(e?.message || e) }
+<!-- Export Modal -->
+<div class="modal-bg" id="mExport">
+  <div class="modal">
+    <h3>Export / Save Project</h3>
+    <p id="exportMsg"></p>
+    <div class="export-files" id="exportFiles"></div>
+    <div class="modal-btns">
+      <button onclick="api.reveal()">Reveal in Explorer</button>
+      <button onclick="openEditor()">Open in Editor</button>
+      <button class="cyan" onclick="hideModal('mExport')">Done</button>
+    </div>
+  </div>
+</div>
 
-function renderTimeline(ov){
-  const tl=$('timeline');
-  if(!ov){ tl.style.display='none'; return }
-  tl.style.display='block';
-  const total=Math.max(ov.duration_s, 1);
-  let h=`<div class="tinfo"><span>${esc(ov.editor)} · ${esc(ov.canvas)} · ${ov.fps}fps</span><span>אורך: ${fmtTime(ov.duration_s)}</span></div>`;
-  for(const t of ov.tracks){
-    h+=`<div class="trow"><div class="tlabel">${esc(t.track.replace(' (main)','★'))}${t.muted?' 🔇':''}</div><div class="tbar">`;
-    for(const s of t.segments){
-      const l=s.start/total*100, w=Math.max((s.end-s.start)/total*100, .3);
-      const label=s.text||s.file||s.name||'';
-      h+=`<div class="seg" title="${esc(s.id+' · '+label+' · '+s.start+'–'+s.end+'s')}" style="left:${l}%;width:${w}%;background:${COLORS[s.kind]||'#64748b'}">${esc(label)}</div>`;
-    }
-    h+='</div></div>';
-  }
-  tl.innerHTML=h;
-}
-async function refreshOverview(){ try{ renderTimeline(await api.overview()) }catch(e){} }
-
-function renderEditors(){
-  const sel=$('editor');
-  sel.innerHTML = state.editors.map(e => `<option value="${e.id}">${esc(e.display)}${e.installed?' ✓':''}${e.exportOnly?' (ייבוא)':''}</option>`).join('');
-  sel.value = state.editor;
-  const ed = edInfo();
-  $('edhint').textContent = ed.id==='capcut' ? 'עריכה ישירה של פרויקטי CapCut' :
-    DIRECT.includes(ed.id) ? 'עריכה ישירה של קובץ הפרויקט' :
-    `האפליקציה כותבת קובץ ייבוא. ב-${ed.display}: ${ed.hint}`;
-  $('btnOpen').textContent = `▶ פתח ב-${ed.display.replace(' (export all formats)','')}`;
-  $('btnOpen').style.display = ed.id==='finalcut' || ed.id==='other' ? 'none' : '';
-  const pi = provInfo(state.provider);
-  $('provpill').textContent = `AI: ${pi ? pi.display.replace(' (free models)','').replace(/ \(.*\)/,'') : state.provider}`;
-  $('provpill').className = 'pill ' + (state.hasKey ? 'ok' : 'run');
-}
-$('editor').onchange = async () => {
-  try{
-    const list = await api.set_editor($('editor').value);
-    state.editor = $('editor').value; current = null; renderEditors();
-    $('ptitle').textContent = 'לא נבחר פרויקט'; renderTimeline(null);
-    renderProjectList(list); pollEditor();
-  }catch(e){ $('editor').value = state.editor; add('msg err', errMsg(e)) }
-};
-
-function renderProjectList(list){
-  $('plist').innerHTML = list.map(p => `<div class="pitem ${current===p.path?'on':''}" data-f="${esc(p.path)}"><span title="${esc(p.path)}">${esc(p.name)}</span><small>${p.duration?fmtTime(p.duration):esc((p.modified||'').split(' ')[0])}</small></div>`).join('')
-    || '<p class="hint" style="padding:8px">אין עדיין פרויקטים — צור חדש או פתח קובץ</p>';
-  document.querySelectorAll('.pitem').forEach(el => el.onclick = () => openProject(el.dataset.f));
-}
-async function loadProjects(){ try{ renderProjectList(await api.projects()) }catch(e){ add('msg err', errMsg(e)) } }
-
-async function openProject(path){
-  if(busy) return;
-  try{
-    const ov = await api.open_project(path);
-    current = path; $('ptitle').textContent = ov.project; renderTimeline(ov);
-    add('msg sys', `נפתח „${esc(ov.project)}” — ${ov.tracks.reduce((a,t)=>a+t.segments.length,0)} קטעים, ${fmtTime(ov.duration_s)}`);
-    loadProjects();
-  }catch(e){ add('msg err', errMsg(e)) }
-}
-async function openFile(){
-  try{ const ov = await api.open_file(); if(ov){ $('ptitle').textContent = ov.project; renderTimeline(ov); loadProjects() } }
-  catch(e){ add('msg err', errMsg(e)) }
-}
-
-async function pollEditor(){
-  try{
-    const s=await api.editor_status(), ed=edInfo(), el=$('edstatus');
-    const direct = DIRECT.includes(ed.id);
-    el.style.display = direct && s.installed ? '' : 'none';
-    el.textContent = s.running ? `${ed.display} פתוח` : `${ed.display} סגור ✓`;
-    el.className = 'pill ' + (s.running ? 'run' : 'ok');
-    $('btnClose').style.display = direct && s.running ? '' : 'none';
-    return direct && s.running;
-  }catch(e){ return false }
-}
-async function closeEditor(){ add('msg sys',`סוגר את ${esc(edInfo().display)}…`); await api.close_editor(); await pollEditor(); refreshOverview() }
-async function openEditor(){
-  try{
-    await api.open_editor(); const ed=edInfo();
-    add('msg sys', DIRECT.includes(ed.id)
-      ? `${esc(ed.display)} נפתח — פתח בו את הפרויקט כדי לראות את השינויים. סגור אותו לפני הבקשה הבאה.`
-      : `${esc(ed.display)} נפתח. ${esc(ed.hint)} (הכפתור 📁 מראה איפה הקבצים)`);
-    setTimeout(pollEditor,3000);
-  }catch(e){ add('msg err', errMsg(e)) }
-}
-async function reveal(){ await api.reveal() }
-async function doUndo(){ if(busy) return; try{ const r=await api.undo(); add('msg sys', `↶ בוטל: „${esc(r.label)}”`); refreshOverview() }catch(e){ add('msg err', errMsg(e)) } }
-async function newChat(){ await api.new_chat(); $('chat').innerHTML=''; add('msg sys','שיחה חדשה התחילה') }
-
-function setBusy(b){
-  busy=b; $('send').disabled=b; $('stop').style.display=b?'':'none';
-  if(b){ typingEl=document.createElement('div'); typingEl.className='typing'; typingEl.innerHTML='עובד<span>.</span><span>.</span><span>.</span>'; $('chat').appendChild(typingEl); scrollDown() }
-  else if(typingEl){ typingEl.remove(); typingEl=null }
-}
-async function send(){
-  const text=$('input').value.trim();
-  if(!text || busy) return;
-  if(await pollEditor()){ pendingText=text; $('runTitle').textContent=`${edInfo().display} פתוח`; show('mRun'); return }
-  doSend(text);
-}
-async function runChoice(c){
-  hide('mRun'); const t=pendingText; pendingText=null;
-  if(c==='cancel') return;
-  if(c==='close') await closeEditor();
-  doSend(t);
-}
-async function doSend(text){
-  $('input').value=''; autoGrow();
-  add('msg user', esc(text));
-  setBusy(true);
-  const r=await api.send(text);
-  if(!r.ok){ setBusy(false); if(r.error==='nokey') showSettings(); else add('msg err', esc(r.error)) }
-}
-function quick(t){ $('input').value=t; send() }
-
-function onEvent(kind, data){
-  if(kind==='assistant') add('msg bot', esc(data));
-  else if(kind==='tool'){ const d=add('tool', `🔧 ${esc(TOOL_HE[data.name]||data.name)}<pre>${esc(JSON.stringify(data.input,null,1))}</pre>`); d.onclick=()=>d.classList.toggle('open') }
-  else if(kind==='changed'){ refreshOverview(); if(data) add('msg sys', esc(data)) }
-  else if(kind==='error') add('msg err', esc(data));
-  else if(kind==='info') add('msg sys', esc(data));
-  else if(kind==='provider'){ if(state){ state.provider=data.id; const p=provInfo(data.id); if(p) p.hasKey=true; renderEditors() } }
-  else if(kind==='dropped'){ if(data?.length) insert(data.map(f=>`"${f}"`).join(' ')) }
-  else if(kind==='update'){ updUrl=data.url; const b=$('updBtn'); b.textContent=`⬆ גרסה ${data.version} זמינה`; b.style.display='' }
-  else if(kind==='project'){ current=data.path; $('ptitle').textContent=data.name; refreshOverview(); loadProjects() }
-  else if(kind==='done'){ setBusy(false); refreshOverview() }
-}
-
-async function attachFolder(){ const f=await api.pick_folder(); if(f) insert(`"${f}"`) }
-async function attachFiles(){ const fs=await api.pick_files(); if(fs?.length) insert(fs.map(f=>`"${f}"`).join(' ')) }
-function insert(s){ const i=$('input'); i.value = (i.value ? i.value.trimEnd()+' ' : '') + s + ' '; i.focus(); autoGrow() }
-
-function provInfo(id){ return state?.providers.find(p => p.id === id) }
-function pickProvider(id){
-  provider=id; const p=provInfo(id); $('provSel').value=id;
-  $('provNote').textContent = p.note;
-  $('keyLabel').innerHTML = `מפתח API — מ-<a onclick="api.open_url('${p.keyUrl}')">${esc(new URL(p.keyUrl).host)}</a>`;
-  $('provKey').value=''; $('provKey').placeholder = p.hasKey ? 'נשמר ✓ (השאר ריק כדי לא לשנות)' : 'הדבק כאן את המפתח';
-  const sel=$('provModel'); sel.innerHTML='<option value="">(אוטומטי — הכי מתאים)</option>';
-  if(p.model){ sel.add(new Option(p.model, p.model)); sel.value=p.model }
-}
-function showSettings(){
-  $('provSel').innerHTML = state.providers.map(p => `<option value="${p.id}">${esc(p.display)}${p.free?' — חינם':' — בתשלום'}${p.hasKey?' ✓':''}</option>`).join('');
-  pickProvider(state.provider || 'gemini'); show('mSettings');
-}
-async function loadModels(){
-  try{
-    const list = await api.list_models(provider, $('provKey').value.trim());
-    const sel=$('provModel'); const keep=sel.value;
-    sel.innerHTML='<option value="">(אוטומטי — הכי מתאים)</option>' + list.map(m=>`<option>${esc(m)}</option>`).join('');
-    sel.value = list.includes(keep) ? keep : (list[0] || '');
-    if(!list.length) alert('לא נמצאו מודלים מתאימים');
-  }catch(e){ alert(e.message) }
-}
-async function saveSettings(){
-  try{
-    state = await api.save_settings({ provider, key:$('provKey').value.trim(), model:$('provModel').value });
-    hide('mSettings'); renderEditors();
-    add('msg sys', state.hasKey ? `נשמר ✓ — עובד עם ${esc(provInfo(provider).display)}` : 'חסר מפתח API לשירות שנבחר');
-  }catch(e){ alert(e.message) }
-}
-function showNewProject(){ $('newName').value=''; show('mNew'); $('newName').focus() }
-async function createProject(){
-  const n=$('newName').value.trim(); if(!n) return;
-  if(await pollEditor()){ add('msg err',`סגור את ${esc(edInfo().display)} לפני יצירת פרויקט חדש.`); hide('mNew'); return }
-  hide('mNew');
-  try{ const ov=await api.new_project(n, $('newRatio').value); await loadProjects(); add('msg sys',`נוצר פרויקט חדש „${esc(ov.project)}”`); renderTimeline(ov); $('ptitle').textContent=ov.project }
-  catch(e){ add('msg err', errMsg(e)) }
-}
-
-function autoGrow(){ const i=$('input'); i.style.height='auto'; i.style.height=Math.min(i.scrollHeight,180)+'px' }
-$('input').addEventListener('input', autoGrow);
-window.addEventListener('resize', autoGrow);
-$('input').addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send() } });
-// drag & drop photos, videos, songs or folders anywhere on the window
-document.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('dragging') });
-document.addEventListener('dragleave', e => { if(!e.relatedTarget) document.body.classList.remove('dragging') });
-document.addEventListener('drop', e => {
-  e.preventDefault(); document.body.classList.remove('dragging');
-  const files = e.dataTransfer?.files;
-  if(!files || !files.length) return;
-  try{ window.chrome.webview.postMessageWithAdditionalObjects({ method: 'dropped' }, files) }
-  catch(err){ add('msg err', 'אפשר לגרור רק קבצים ותיקיות מהמחשב (לא מדפדפן). שמור את הקובץ קודם ואז גרור אותו.') }
-});
-['mSettings','mNew','mRun'].forEach(id => $(id).addEventListener('click', e => { if(e.target.id===id) hide(id) }));
-
-(async () => {
-  try{
-    state = await api.init();
-    renderEditors(); await loadProjects();
-    if(state.project){ current=state.projectPath; $('ptitle').textContent=state.project; refreshOverview(); loadProjects() }
-    if(!state.hasKey) showSettings();
-    pollEditor(); setInterval(pollEditor, 5000);
-  }catch(e){ add('msg err', errMsg(e)) }
-})();
-</script>
+<script src="https://aive.local/app.js"></script>
 </body>
 </html>

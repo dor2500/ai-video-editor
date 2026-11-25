@@ -19,7 +19,7 @@ public sealed class CapCutProject : EditorProject
     public static readonly IReadOnlySet<string> Tools = new HashSet<string>
     {
         "add_media", "add_audio", "add_text", "edit_segments", "move_segment", "delete_segments", "split_segment",
-        "reorder_main_track", "close_gaps", "set_track_mute", "set_canvas", "set_transitions", "set_animations",
+        "reorder_main_track", "close_gaps", "set_track_mute", "set_track_hidden", "set_canvas", "set_transitions", "set_animations",
         "add_motion", "add_filter_or_effect", "set_audio_fade", "search_catalog",
     };
 
@@ -233,24 +233,66 @@ public sealed class CapCutProject : EditorProject
         var c = d["canvas_config"];
         var tracks = new JsonArray();
         var counters = new Dictionary<string, int>();
+        var usedMaterialIds = new HashSet<string>();
         foreach (var t in Tracks)
         {
             var type = t.Str("type");
             var idx = counters.GetValueOrDefault(type);
             counters[type] = idx + 1;
+            bool isMain = type == "video" && idx == 0;
             var segs = new JsonArray();
-            foreach (var s in Segs(t!.AsObject())) segs.Add(Describe(s));
+            foreach (var s in Segs(t!.AsObject()))
+            {
+                var mid = s.Str("material_id");
+                if (mid != "") usedMaterialIds.Add(mid);
+                segs.Add(Describe(s));
+            }
+            var attr = t.Long("attribute");
             tracks.Add(new JsonObject
             {
-                ["track"] = $"{type}#{idx}" + (type == "video" && idx == 0 ? " (main)" : ""),
-                ["muted"] = (t.Long("attribute") & 1) == 1, ["segments"] = segs,
+                ["track"] = $"{type}#{idx}" + (isMain ? " (main)" : ""),
+                ["type"] = type, ["index"] = idx, ["is_main"] = isMain,
+                ["muted"] = (attr & 1) == 1, ["hidden"] = (attr & 2) == 2,
+                ["segments"] = segs,
             });
         }
+        var pool = new JsonArray();
+        var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var v in MList("videos"))
+        {
+            var raw = v.Str("path").Replace('/', '\\');
+            if (raw == "" || !seenPaths.Add(raw)) continue;
+            pool.Add(new JsonObject
+            {
+                ["path"] = raw, ["name"] = Path.GetFileName(raw) is { Length: > 0 } fn ? fn : v.Str("material_name"),
+                ["kind"] = v.Str("type") == "photo" ? "photo" : "video",
+                ["duration_s"] = T.Sec(v.Long("duration")),
+                ["width"] = (int)v.Long("width"), ["height"] = (int)v.Long("height"),
+                ["in_timeline"] = usedMaterialIds.Contains(v.Str("id")),
+            });
+        }
+        foreach (var au in MList("audios"))
+        {
+            var raw = au.Str("path").Replace('/', '\\');
+            if (raw == "" || !seenPaths.Add(raw)) continue;
+            pool.Add(new JsonObject
+            {
+                ["path"] = raw, ["name"] = Path.GetFileName(raw) is { Length: > 0 } fn ? fn : au.Str("name"),
+                ["kind"] = "audio",
+                ["duration_s"] = T.Sec(au.Long("duration")),
+                ["width"] = 0, ["height"] = 0,
+                ["in_timeline"] = usedMaterialIds.Contains(au.Str("id")),
+            });
+        }
+        var w = (int)c.Long("width", 1920);
+        var h = (int)c.Long("height", 1080);
+        var ratio = c.Str("ratio") is { Length: > 0 } r ? r : "16:9";
         return new JsonObject
         {
             ["editor"] = "CapCut", ["project"] = Name, ["duration_s"] = T.Sec(d.Long("duration")),
-            ["canvas"] = $"{c.Long("width")}x{c.Long("height")} ({c.Str("ratio")})", ["fps"] = d.Dbl("fps", 30),
-            ["tracks"] = tracks,
+            ["canvas"] = $"{w}x{h} ({ratio})", ["width"] = w, ["height"] = h, ["ratio"] = ratio,
+            ["fps"] = d.Dbl("fps", 30), ["can_undo"] = CanUndo, ["can_redo"] = CanRedo,
+            ["media_pool"] = pool, ["tracks"] = tracks,
         };
     }
 
@@ -259,6 +301,10 @@ public sealed class CapCutProject : EditorProject
         var info = new JsonObject
         {
             ["id"] = s.Str("id")[..8], ["start"] = T.Sec(Start(s)), ["end"] = T.Sec(Start(s) + Dur(s)), ["dur"] = T.Sec(Dur(s)),
+            ["source_in"] = T.Sec(s["source_timerange"].Long("start")),
+            ["visible"] = s.Bool("visible", true),
+            ["flip_h"] = s["clip"]?["flip"]?.Bool("horizontal", false) ?? false,
+            ["flip_v"] = s["clip"]?["flip"]?.Bool("vertical", false) ?? false,
         };
         var (key, mat) = FindMaterial(s.Str("material_id"));
         if (mat != null)
@@ -267,18 +313,37 @@ public sealed class CapCutProject : EditorProject
             {
                 case "videos":
                     info["kind"] = mat.Str("type");
+                    info["path"] = mat.Str("path").Replace('/', '\\');
+                    info["source_dur"] = T.Sec(mat.Long("duration"));
                     info["file"] = Path.GetFileName(mat.Str("path")) is { Length: > 0 } fn ? fn : mat.Str("material_name");
                     break;
                 case "audios":
                     info["kind"] = "audio";
+                    info["path"] = mat.Str("path").Replace('/', '\\');
+                    info["source_dur"] = T.Sec(mat.Long("duration"));
                     info["file"] = mat.Str("name");
                     break;
                 case "texts":
                     info["kind"] = "text";
                     try
                     {
-                        var t = JsonNode.Parse(mat.Str("content", "{}")).Str("text");
+                        var content = JsonNode.Parse(mat.Str("content", "{}"));
+                        var t = content.Str("text");
                         info["text"] = t.Length > 80 ? t[..80] : t;
+                        info["align"] = mat.Long("alignment", 1) switch { 0 => "left", 2 => "right", _ => "center" };
+                        var st0 = content?["styles"]?.AsArray().FirstOrDefault();
+                        if (st0 != null)
+                        {
+                            info["font_size"] = st0.Dbl("size", 8);
+                            info["bold"] = st0.Bool("bold", false);
+                            if (st0["fill"]?["content"]?["solid"]?["color"] is JsonArray rgb && rgb.Count >= 3)
+                            {
+                                int r = (int)Math.Round(Math.Clamp(rgb[0]!.GetValue<double>(), 0, 1) * 255);
+                                int g = (int)Math.Round(Math.Clamp(rgb[1]!.GetValue<double>(), 0, 1) * 255);
+                                int b = (int)Math.Round(Math.Clamp(rgb[2]!.GetValue<double>(), 0, 1) * 255);
+                                info["color"] = $"#{r:X2}{g:X2}{b:X2}";
+                            }
+                        }
                     }
                     catch { info["text"] = "?"; }
                     break;
@@ -303,10 +368,23 @@ public sealed class CapCutProject : EditorProject
         foreach (var r in s["extra_material_refs"]?.AsArray() ?? [])
         {
             var (k, em) = FindMaterial(r!.GetValue<string>());
-            if (k == "transitions") fx.Add($"transition:{em.Str("name")}");
+            if (k == "transitions")
+            {
+                var tn = em.Str("name");
+                fx.Add($"transition:{tn}");
+                info["transition"] = tn;
+                info["transition_dur"] = T.Sec(em.Long("duration"));
+            }
             else if (k == "material_animations")
                 foreach (var a in em!["animations"]?.AsArray() ?? []) fx.Add($"anim-{a.Str("type")}:{a.Str("name")}");
-            else if (k == "audio_fades") fx.Add($"fade:{T.Sec(em.Long("fade_in_duration"))}/{T.Sec(em.Long("fade_out_duration"))}");
+            else if (k == "audio_fades")
+            {
+                var fi = em.Long("fade_in_duration");
+                var fo = em.Long("fade_out_duration");
+                fx.Add($"fade:{T.Sec(fi)}/{T.Sec(fo)}");
+                if (fi > 0) info["fade_in"] = T.Sec(fi);
+                if (fo > 0) info["fade_out"] = T.Sec(fo);
+            }
         }
         if (s["common_keyframes"] is JsonArray kfs && kfs.Count > 0) fx.Add("keyframes");
         if (fx.Count > 0) info["fx"] = fx;
@@ -328,6 +406,7 @@ public sealed class CapCutProject : EditorProject
         "reorder_main_track" => ReorderMain(a.L("order")),
         "close_gaps" => Obj(new { moved = CloseGaps(a.S("track", "video#0")) }),
         "set_track_mute" => SetMute(a.Req("track"), a.B("muted", true)),
+        "set_track_hidden" => SetHidden(a.Req("track"), a.B("hidden", true)),
         "set_canvas" => SetCanvas(a.Req("ratio")),
         "search_catalog" => Catalog.Search(a.Req("category"), a.S("query", ""), (int)a.D("limit", 60)),
         "set_transitions" => SetTransitions(a),
@@ -760,6 +839,14 @@ public sealed class CapCutProject : EditorProject
         var t = TrackByLabel(label);
         var attr = t.Long("attribute");
         t["attribute"] = muted ? attr | 1 : attr & ~1L;
+        return "ok";
+    }
+
+    JsonNode SetHidden(string label, bool hidden)
+    {
+        var t = TrackByLabel(label);
+        var attr = t.Long("attribute");
+        t["attribute"] = hidden ? attr | 2 : attr & ~2L;
         return "ok";
     }
 

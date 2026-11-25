@@ -28,7 +28,7 @@ public sealed class TimelineProject : EditorProject
     public static readonly IReadOnlySet<string> Tools = new HashSet<string>
     {
         "add_media", "add_audio", "add_text", "edit_segments", "move_segment", "delete_segments", "split_segment",
-        "reorder_main_track", "close_gaps", "set_track_mute", "set_canvas", "set_transitions", "set_animations",
+        "reorder_main_track", "close_gaps", "set_track_mute", "set_track_hidden", "set_canvas", "set_transitions", "set_animations",
         "add_motion", "set_audio_fade", "search_catalog",
     };
 
@@ -140,24 +140,57 @@ public sealed class TimelineProject : EditorProject
     }
 
     // ------------------------------------------------------------------ overview
+    static string RatioOf(int w, int h) => (w, h) switch
+    {
+        (1920, 1080) or (1280, 720) or (3840, 2160) => "16:9",
+        (1080, 1920) or (720, 1280) or (2160, 3840) => "9:16",
+        (1080, 1080) => "1:1",
+        (1440, 1080) => "4:3",
+        (1080, 1440) => "3:4",
+        (2560, 1080) => "21:9",
+        (1080, 1350) => "4:5",
+        (2160, 1080) => "2:1",
+        _ when w > 0 && h > 0 => $"{w}:{h}",
+        _ => "16:9",
+    };
+
     public override JsonNode Overview()
     {
         var tracks = new JsonArray();
         var counters = new Dictionary<string, int>();
+        var pool = new JsonArray();
+        var seenPool = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var t in Doc.Tracks)
         {
             var i = counters.GetValueOrDefault(t.Type);
             counters[t.Type] = i + 1;
+            bool isMain = t.Type == "video" && i == 0;
+            foreach (var c in t.Clips)
+            {
+                if (!string.IsNullOrEmpty(c.Path) && seenPool.Add(c.Path))
+                {
+                    pool.Add(new JsonObject
+                    {
+                        ["path"] = c.Path, ["name"] = c.FileName, ["kind"] = c.Kind,
+                        ["duration_s"] = T.Sec(c.SourceDur > 0 ? c.SourceDur : c.Dur),
+                        ["width"] = c.MediaWidth, ["height"] = c.MediaHeight, ["in_timeline"] = true,
+                    });
+                }
+            }
             tracks.Add(new JsonObject
             {
-                ["track"] = $"{t.Type}#{i}" + (t.Type == "video" && i == 0 ? " (main)" : ""), ["muted"] = t.Muted,
+                ["track"] = $"{t.Type}#{i}" + (isMain ? " (main)" : ""),
+                ["type"] = t.Type, ["index"] = i, ["is_main"] = isMain,
+                ["muted"] = t.Muted, ["hidden"] = t.Hidden,
                 ["segments"] = new JsonArray(t.Clips.Select(c => (JsonNode)Describe(c)).ToArray()),
             });
         }
         return new JsonObject
         {
             ["editor"] = editor.Display, ["project"] = Name, ["duration_s"] = T.Sec(Doc.Duration),
-            ["canvas"] = $"{Doc.Width}x{Doc.Height}", ["fps"] = Doc.Fps, ["tracks"] = tracks,
+            ["canvas"] = $"{Doc.Width}x{Doc.Height}", ["width"] = Doc.Width, ["height"] = Doc.Height,
+            ["ratio"] = RatioOf(Doc.Width, Doc.Height), ["fps"] = Doc.Fps,
+            ["can_undo"] = CanUndo, ["can_redo"] = CanRedo, ["media_pool"] = pool, ["tracks"] = tracks,
         };
     }
 
@@ -166,9 +199,17 @@ public sealed class TimelineProject : EditorProject
         var o = new JsonObject
         {
             ["id"] = c.Id[..Math.Min(8, c.Id.Length)], ["start"] = T.Sec(c.Start), ["end"] = T.Sec(c.End), ["dur"] = T.Sec(c.Dur),
-            ["kind"] = c.Kind,
+            ["kind"] = c.Kind, ["path"] = c.Path, ["source_in"] = T.Sec(c.In), ["source_dur"] = T.Sec(c.SourceDur),
+            ["visible"] = c.Opacity > 0, ["flip_h"] = c.FlipH, ["flip_v"] = c.FlipV,
         };
-        if (c.Kind == "text") o["text"] = c.Text;
+        if (c.Kind == "text")
+        {
+            o["text"] = c.Text;
+            o["font_size"] = c.FontSize;
+            o["color"] = c.Color;
+            o["bold"] = c.Bold;
+            o["align"] = c.Align;
+        }
         else if (c.FileName != "") o["file"] = c.FileName;
         if (c.X != 0 || c.Y != 0) o["pos"] = new JsonArray(Math.Round(c.X, 3), Math.Round(c.Y, 3));
         if (c.Scale != 1) o["scale"] = Math.Round(c.Scale, 3);
@@ -176,6 +217,10 @@ public sealed class TimelineProject : EditorProject
         if (c.Opacity != 1) o["opacity"] = c.Opacity;
         if (c.Volume != 1 && c.Kind is "video" or "audio") o["volume"] = c.Volume;
         if (c.Speed != 1) o["speed"] = c.Speed;
+        if (c.AudioFadeIn > 0) o["fade_in"] = T.Sec(c.AudioFadeIn);
+        if (c.AudioFadeOut > 0) o["fade_out"] = T.Sec(c.AudioFadeOut);
+        if (c.Transition != null) { o["transition"] = c.Transition; o["transition_dur"] = T.Sec(c.TransitionDur); }
+        if (c.Motion != null) o["motion"] = c.Motion;
         var fx = new JsonArray();
         if (c.Transition != null) fx.Add($"transition:{c.Transition}");
         if (c.VideoFadeIn > 0) fx.Add("anim-in:Fade In");
@@ -205,6 +250,10 @@ public sealed class TimelineProject : EditorProject
             case "set_track_mute":
                 var t = ByLabel(a.Req("track"));
                 t.Muted = a.B("muted", true);
+                return "ok";
+            case "set_track_hidden":
+                var th = ByLabel(a.Req("track"));
+                th.Hidden = a.B("hidden", true);
                 return "ok";
             case "set_canvas": return SetCanvas(a.Req("ratio"));
             case "search_catalog": return Search(a.Req("category"), a.S("query", ""));

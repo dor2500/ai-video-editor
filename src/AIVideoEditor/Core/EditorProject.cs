@@ -92,18 +92,31 @@ public abstract class EditorProject
         }
     }
 
-    public void Snapshot(string label)
+    string RedoDir => Path.Combine(BackupDir, "redo");
+
+    public bool CanUndo => Directory.Exists(BackupDir) && Directory.GetFiles(BackupDir, "*.bak").Length > 0;
+    public bool CanRedo => Directory.Exists(RedoDir) && Directory.GetFiles(RedoDir, "*.bak").Length > 0;
+
+    static void CopySnapshot(string src, string dstDir, string ext, string label)
     {
-        if (!File.Exists(MainFile)) return;
-        Directory.CreateDirectory(BackupDir);
+        Directory.CreateDirectory(dstDir);
         var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss-fff");
-        var dst = Path.Combine(BackupDir, stamp + Path.GetExtension(MainFile) + ".bak");
-        File.Copy(MainFile, dst, true);
+        var dst = Path.Combine(dstDir, stamp + ext + ".bak");
+        File.Copy(src, dst, true);
         File.WriteAllText(dst + ".label", label);
-        foreach (var old in Directory.GetFiles(BackupDir, "*.bak").OrderBy(x => x).SkipLast(60))
+        foreach (var old in Directory.GetFiles(dstDir, "*.bak").OrderBy(x => x).SkipLast(60))
         {
             try { File.Delete(old); File.Delete(old + ".label"); } catch { }
         }
+    }
+
+    public void Snapshot(string label)
+    {
+        if (!File.Exists(MainFile)) return;
+        CopySnapshot(MainFile, BackupDir, Path.GetExtension(MainFile), label);
+        if (Directory.Exists(RedoDir))
+            foreach (var f in Directory.GetFiles(RedoDir))
+                try { File.Delete(f); } catch { }
     }
 
     public string Undo()
@@ -112,9 +125,26 @@ public abstract class EditorProject
         if (files.Count == 0) throw new EditException("Nothing to undo");
         var last = files[^1];
         var label = File.Exists(last + ".label") ? File.ReadAllText(last + ".label") : "";
+        if (File.Exists(MainFile))
+            CopySnapshot(MainFile, RedoDir, Path.GetExtension(MainFile), label);
         File.Copy(last, MainFile, true);
         Reload();
         Save(); // rewrite companion files (e.g. CapCut's timeline copy) from the restored state
+        try { File.Delete(last); File.Delete(last + ".label"); } catch { }
+        return label;
+    }
+
+    public string Redo()
+    {
+        var files = Directory.Exists(RedoDir) ? Directory.GetFiles(RedoDir, "*.bak").OrderBy(x => x).ToList() : [];
+        if (files.Count == 0) throw new EditException("Nothing to redo");
+        var last = files[^1];
+        var label = File.Exists(last + ".label") ? File.ReadAllText(last + ".label") : "";
+        if (File.Exists(MainFile))
+            CopySnapshot(MainFile, BackupDir, Path.GetExtension(MainFile), label);
+        File.Copy(last, MainFile, true);
+        Reload();
+        Save();
         try { File.Delete(last); File.Delete(last + ".label"); } catch { }
         return label;
     }

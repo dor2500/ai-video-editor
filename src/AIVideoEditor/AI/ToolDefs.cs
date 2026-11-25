@@ -74,6 +74,8 @@ public static class ToolDefs
         new("close_gaps", "Remove empty gaps on a track (default video#0).", P(("track", S())), []),
         new("set_track_mute", "Mute/unmute a whole track, e.g. 'video#0' to silence the original clip sound.",
             P(("track", S()), ("muted", B())), ["track", "muted"]),
+        new("set_track_hidden", "Hide/show a whole visual track, e.g. 'video#1'.",
+            P(("track", S()), ("hidden", B())), ["track", "hidden"]),
         new("set_canvas", "Change the aspect ratio of the project.", P(("ratio", S(null, Ratios))), ["ratio"]),
         new("search_catalog", "Search effects by name. Categories: transition, video_in, video_out, video_combo, text_in, text_out, text_loop, filter, effect, font. Empty query lists the first items.",
             P(("category", S()), ("query", S()), ("limit", N())), ["category"]),
@@ -96,7 +98,7 @@ public static class ToolDefs
     public static readonly HashSet<string> Mutating =
     [
         "add_media", "add_audio", "add_text", "edit_segments", "move_segment", "delete_segments", "split_segment",
-        "reorder_main_track", "close_gaps", "set_track_mute", "set_canvas", "set_transitions", "set_animations",
+        "reorder_main_track", "close_gaps", "set_track_mute", "set_track_hidden", "set_canvas", "set_transitions", "set_animations",
         "add_motion", "add_filter_or_effect", "set_audio_fade",
     ];
 }

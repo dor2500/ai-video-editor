@@ -148,10 +148,10 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
         var tried = new HashSet<string>();
         for (int step = 0; step < 40; step++)
         {
-            if (cts.IsCancellationRequested) { emit("assistant", "⏹ נעצר."); return; }
+            if (cts.IsCancellationRequested) { emit("assistant", "Stopped."); return; }
             AiTurn turn;
             try { turn = await Provider.NextAsync(SystemBase, AllTools, cts.Token); }
-            catch (OperationCanceledException) { emit("assistant", "⏹ נעצר."); return; }
+            catch (OperationCanceledException) { emit("assistant", "Stopped."); return; }
             catch (Exception e) when (IsQuotaOrCredit(e) && NextProvider != null)
             {
                 tried.Add(ProviderId);
@@ -162,7 +162,7 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
                 tried.Add(ProviderId);
                 Provider.AddUser(Context() + text);
                 emit("provider", new { id = ProviderId, display = Provider.Display });
-                emit("info", $"{from}: נגמרה המכסה/הקרדיט — עברתי אוטומטית ל-{Provider.Display} וממשיך בבקשה.");
+                emit("info", $"{from}: quota/credit exhausted — switched automatically to {Provider.Display} and continuing.");
                 step--;
                 continue;
             }
@@ -174,7 +174,7 @@ public sealed class Agent(IAiProvider provider, Action<string, object?> emit)
                 Provider.Reset();
                 lastContextKey = "";
                 Provider.AddUser(Context() + text);
-                emit("info", "השיחה התחילה מחדש בגלל שגיאה טכנית — ממשיך בבקשה.");
+                emit("info", "Conversation restarted due to a technical error — continuing your request.");
                 step--;
                 continue;
             }

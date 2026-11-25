@@ -53,8 +53,14 @@ foreach (var ed in Editors.All.Where(e => e.Id != "capcut"))
         p.Run("add_text", A("""{"text":"שלום עולם","start":0.5,"duration":3,"font_size":14,"y":0.6,"color":"#FFD700","stroke_color":"#000000"}"""));
         p.Run("set_transitions", A("""{"all_main":true,"name":"Cross Dissolve","duration":0.6}"""));
         p.Run("add_motion", A("""{"all_main_photos":true,"preset":"alternate"}"""));
+        p.Run("set_track_hidden", A("""{"track":"video#0","hidden":true}"""));
         var ov = p.Overview();
+        Check((int)ov["width"]! == 1920 && (int)ov["height"]! == 1080 && ov["ratio"]!.ToString() == "16:9", "overview includes canvas dimensions and ratio");
+        Check(ov["media_pool"]!.AsArray().Count > 0, "overview includes media_pool");
+        Check((bool)ov["tracks"]![0]!["is_main"]! && (bool)ov["tracks"]![0]!["hidden"]!, "overview includes track is_main and hidden flags");
+        p.Run("set_track_hidden", A("""{"track":"video#0","hidden":false}"""));
         var first = ov["tracks"]![0]!["segments"]![0]!["id"]!.ToString();
+        Check(!string.IsNullOrEmpty(ov["tracks"]![0]!["segments"]![0]!["path"]?.ToString()), "overview segment includes source path");
         p.Run("set_animations", A($$"""{"ids":["{{first}}"],"kind":"in","name":"Fade In","duration":0.5}"""));
         p.Run("edit_segments", A($$"""{"ids":["{{first}}"],"duration":3,"x":0.1,"scale":1.1}"""));
         p.Run("split_segment", A($$"""{"id":"{{first}}","at":1.0}"""));
@@ -90,7 +96,9 @@ foreach (var ed in Editors.All.Where(e => e.Id != "capcut"))
             re.Save();
         }
         var label = p.Undo();
-        Check(label == "test", "undo restores the snapshot");
+        Check(label == "test" && p.CanRedo, "undo restores the snapshot and enables redo");
+        var redoLabel = p.Redo();
+        Check(redoLabel == "test" && p.CanUndo, "redo reapplies the undone snapshot");
     }
     catch (Exception e)
     {
